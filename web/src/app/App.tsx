@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { ViewerLayout } from "./ViewerLayout";
+import { EditorLayout } from "@/modules/editor/EditorLayout";
 import { useCameraStore } from "@/modules/camera/cameraStore";
 import { useEditorStore } from "@/modules/editor/editorStore";
 import { useMapStore } from "@/modules/map/mapStore";
@@ -18,9 +19,5 @@ export function App() {
     });
   }, [fetchCameras]);
 
-  if (mode === "edit") {
-    return <div className="h-full bg-gray-900 text-white p-4">Editor (coming in Task 16)</div>;
-  }
-
-  return <ViewerLayout />;
+  return mode === "edit" ? <EditorLayout /> : <ViewerLayout />;
 }

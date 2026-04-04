@@ -6,6 +6,7 @@ import { CameraForm } from "@/modules/camera/CameraForm";
 import { useCameraStore } from "@/modules/camera/cameraStore";
 import { useEditorStore } from "./editorStore";
 import { useHistoryStore } from "./historyStore";
+import { DragDrop } from "./DragDrop";
 
 export function EditorLayout() {
   const cameras = useCameraStore((s) => s.cameras);
@@ -75,6 +76,7 @@ export function EditorLayout() {
                 onClick={handleCameraClick}
               />
             ))}
+          <DragDrop />
         </MapView>
 
         <div className="absolute top-3 left-3 z-[1000] bg-amber-900/30 text-amber-400 text-xs px-2.5 py-1 rounded border border-amber-700/30">

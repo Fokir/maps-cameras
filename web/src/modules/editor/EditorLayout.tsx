@@ -7,6 +7,7 @@ import { useCameraStore } from "@/modules/camera/cameraStore";
 import { useEditorStore } from "./editorStore";
 import { useHistoryStore } from "./historyStore";
 import { DragDrop } from "./DragDrop";
+import { CameraControls } from "@/modules/map/CameraControls";
 
 export function EditorLayout() {
   const cameras = useCameraStore((s) => s.cameras);
@@ -77,6 +78,9 @@ export function EditorLayout() {
               />
             ))}
           <DragDrop />
+          {selectedId && cameras.find((c) => c.id === selectedId && c.lat != null) && (
+            <CameraControls camera={cameras.find((c) => c.id === selectedId)!} />
+          )}
         </MapView>
 
         <div className="absolute top-3 left-3 z-[1000] bg-amber-900/30 text-amber-400 text-xs px-2.5 py-1 rounded border border-amber-700/30">

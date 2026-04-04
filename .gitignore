@@ -1,0 +1,21 @@
+# Go
+/maps-cameras
+/maps-cameras.exe
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# Data
+data/
+
+# IDE
+.idea/
+.vscode/
+
+# Superpowers
+.superpowers/
+
+# OS
+.DS_Store
+Thumbs.db

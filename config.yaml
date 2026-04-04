@@ -1,0 +1,9 @@
+server:
+  port: 8080
+database:
+  path: ./data/cameras.db
+go2rtc:
+  url: http://server.local
+map:
+  center: [54.3142, 48.4031]
+  zoom: 18

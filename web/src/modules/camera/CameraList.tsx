@@ -1,5 +1,6 @@
 import { useCameraStore } from "./cameraStore";
 import { useEditorStore } from "@/modules/editor/editorStore";
+import { ImportM3U } from "./ImportM3U";
 
 export function CameraList() {
   const cameras = useCameraStore((s) => s.cameras);
@@ -50,6 +51,9 @@ export function CameraList() {
       >
         + Добавить
       </button>
+      <div className="mt-2">
+        <ImportM3U />
+      </div>
     </div>
   );
 }

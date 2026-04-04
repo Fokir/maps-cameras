@@ -10,7 +10,10 @@ build-frontend:
 	cd web && npm run build
 
 build: build-frontend
+	rm -rf cmd/server/dist
+	cp -r web/dist cmd/server/dist
 	go build -o maps-cameras ./cmd/server/main.go
+	rm -rf cmd/server/dist
 
 run: build
 	./maps-cameras

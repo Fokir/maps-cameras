@@ -6,6 +6,7 @@ import { useEditorStore } from "@/modules/editor/editorStore";
 import { useMapStore } from "@/modules/map/mapStore";
 import { api } from "@/shared/api";
 import type { MapConfig } from "@/shared/types";
+import { ToastProvider } from "@/shared/toast/ToastProvider";
 
 export function App() {
   const fetchCameras = useCameraStore((s) => s.fetchCameras);
@@ -36,5 +37,9 @@ export function App() {
     initialFitDone.current = true;
   }, [cameras]);
 
-  return mode === "edit" ? <EditorLayout /> : <ViewerLayout />;
+  return (
+    <ToastProvider>
+      {mode === "edit" ? <EditorLayout /> : <ViewerLayout />}
+    </ToastProvider>
+  );
 }

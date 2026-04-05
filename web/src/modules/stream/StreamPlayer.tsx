@@ -2,6 +2,8 @@
 import { useCallback, useState } from "react";
 import { useStreamStore } from "./streamStore";
 import { useTransportRace } from "./transports/useTransportRace";
+import { useStreamStats } from "./hooks/useStreamStats";
+import { StatsWidget } from "./overlay/StatsWidget";
 
 export function StreamPlayer() {
   const streamInfo = useStreamStore((s) => s.streamInfo);
@@ -21,6 +23,7 @@ export function StreamPlayer() {
     : null;
 
   const race = useTransportRace(videoEl, wsUrl, webrtcUrl);
+  const stats = useStreamStats(race.active, videoEl);
 
   if (loading) {
     return (
@@ -58,6 +61,7 @@ export function StreamPlayer() {
         muted
         className="max-h-full max-w-full"
       />
+      {race.active && <StatsWidget stats={stats} />}
       {race.phase === "error" && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-red-400 text-center p-4">
           Не удалось подключиться: {race.error}

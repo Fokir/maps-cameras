@@ -5,5 +5,5 @@ database:
 go2rtc:
   url: http://server.local:1984
 map:
-  center: [54.3142, 48.4031]
+  center: [0, 0]
   zoom: 18

@@ -1,5 +1,5 @@
 // web/src/modules/stream/StreamPlayer.tsx
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStreamStore } from "./streamStore";
 import { useTransportRace } from "./transports/useTransportRace";
 import { useStreamStats } from "./hooks/useStreamStats";
@@ -44,6 +44,22 @@ export function StreamPlayer() {
     bitrateSetting
   );
 
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showControls = useCallback(() => {
+    setControlsVisible(true);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3000);
+  }, []);
+
+  useEffect(() => {
+    showControls();
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [showControls]);
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center bg-gray-950 text-gray-400">
@@ -72,7 +88,11 @@ export function StreamPlayer() {
   }
 
   return (
-    <div className="h-full bg-black flex items-center justify-center relative">
+    <div
+      className="h-full bg-black flex items-center justify-center relative"
+      onMouseMove={showControls}
+      onTouchStart={showControls}
+    >
       <video
         ref={videoRef}
         autoPlay
@@ -81,7 +101,15 @@ export function StreamPlayer() {
         className="max-h-full max-w-full"
       />
       {race.active && <StatsWidget stats={stats} />}
-      {race.active && <ControlsBar screenshot={screenshot} recorder={recorder} />}
+      {race.active && (
+        <div
+          className={`transition-opacity duration-300 ${
+            controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <ControlsBar screenshot={screenshot} recorder={recorder} />
+        </div>
+      )}
       {race.active && (
         <BitrateSettingsPopover value={bitrateSetting} onChange={setBitrateSetting} />
       )}

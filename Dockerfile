@@ -20,6 +20,9 @@ RUN go mod download
 
 # Source + embedded frontend
 COPY . .
+# Ensure the embed target starts empty — any stray files from the build
+# context (e.g. a local dev placeholder) would otherwise be included.
+RUN rm -rf ./cmd/server/dist && mkdir -p ./cmd/server/dist
 COPY --from=frontend /app/web/dist ./cmd/server/dist
 
 # Build a static binary (no libc dependency) so it can run on any distro.

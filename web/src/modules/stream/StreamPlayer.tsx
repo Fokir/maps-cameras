@@ -5,6 +5,7 @@ import { useTransportRace } from "./transports/useTransportRace";
 import { useStreamStats } from "./hooks/useStreamStats";
 import { StatsWidget } from "./overlay/StatsWidget";
 import { ControlsBar } from "./overlay/ControlsBar";
+import { BitrateSettingsPopover, loadBitrateSetting } from "./overlay/BitrateSettingsPopover";
 import { useScreenshot } from "./hooks/useScreenshot";
 import { useMediaRecorder, type BitrateSetting } from "./hooks/useMediaRecorder";
 import { useCameraStore } from "@/modules/camera/cameraStore";
@@ -18,13 +19,7 @@ export function StreamPlayer() {
   const cameras = useCameraStore((s) => s.cameras);
   const cameraName = cameras.find((c) => c.id === activeCameraId)?.name ?? "camera";
 
-  const [bitrateSetting] = useState<BitrateSetting>(() => {
-    const stored = localStorage.getItem("maps-cameras.recordingBitrate");
-    if (stored === "2000000" || stored === "4000000" || stored === "8000000") {
-      return Number(stored) as BitrateSetting;
-    }
-    return "auto";
-  });
+  const [bitrateSetting, setBitrateSetting] = useState<BitrateSetting>(loadBitrateSetting);
 
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const videoRef = useCallback((el: HTMLVideoElement | null) => {
@@ -87,6 +82,9 @@ export function StreamPlayer() {
       />
       {race.active && <StatsWidget stats={stats} />}
       {race.active && <ControlsBar screenshot={screenshot} recorder={recorder} />}
+      {race.active && (
+        <BitrateSettingsPopover value={bitrateSetting} onChange={setBitrateSetting} />
+      )}
       {race.phase === "error" && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-red-400 text-center p-4">
           Не удалось подключиться: {race.error}

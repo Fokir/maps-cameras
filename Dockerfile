@@ -37,7 +37,7 @@ RUN apk add --no-cache ca-certificates tzdata && \
 
 WORKDIR /app
 COPY --from=backend /out/maps-cameras /app/maps-cameras
-COPY config.yaml /app/config.yaml.default
+COPY config.yaml.example /app/config.yaml.default
 
 # Writable data dir owned by the unprivileged user
 RUN mkdir -p /app/data && chown -R app:app /app

@@ -10,6 +10,9 @@ cmd/server/dist/
 # Data
 data/
 
+# User config — use config.yaml.example as template
+/config.yaml
+
 # IDE
 .idea/
 .vscode/

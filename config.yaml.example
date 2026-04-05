@@ -23,5 +23,5 @@ go2rtc:
 map:
   # Fallback center + zoom if no cameras are placed yet.
   # Once at least one camera is placed, the app auto-fits to show all of them.
-  center: [54.3142, 48.4031]
+  center: [0, 0]
   zoom: 18

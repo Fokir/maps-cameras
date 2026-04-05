@@ -11,7 +11,7 @@ COPY web/ .
 RUN npm run build
 
 # ---------- Stage 2: Build backend ----------
-FROM golang:1.22-alpine AS backend
+FROM golang:1.25-alpine AS backend
 WORKDIR /app
 
 # Cache modules

@@ -18,8 +18,22 @@ export function ViewerLayout() {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
   const [splitPercent, setSplitPercent] = useState(50);
+  const [isVertical, setIsVertical] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const { width, height } = el.getBoundingClientRect();
+      setIsVertical(height > width);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const handleCameraClick = useCallback(
     (id: string) => {
@@ -37,7 +51,9 @@ export function ViewerLayout() {
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragging.current || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const percent = ((e.clientX - rect.left) / rect.width) * 100;
+      const percent = isVertical
+        ? ((e.clientY - rect.top) / rect.height) * 100
+        : ((e.clientX - rect.left) / rect.width) * 100;
       setSplitPercent(Math.max(20, Math.min(80, percent)));
     };
     const handleMouseUp = () => {
@@ -49,7 +65,7 @@ export function ViewerLayout() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, []);
+  }, [isVertical]);
 
   // Mobile: show stream fullscreen
   if (isMobile && activeCameraId) {
@@ -96,9 +112,11 @@ export function ViewerLayout() {
   }
 
   // Desktop: split
+  const primarySize = { [isVertical ? "height" : "width"]: `${splitPercent}%` };
+  const secondarySize = { [isVertical ? "height" : "width"]: `${100 - splitPercent}%` };
   return (
-    <div ref={containerRef} className="h-full flex relative">
-      <div style={{ width: `${splitPercent}%` }} className="relative">
+    <div ref={containerRef} className={`h-full flex relative ${isVertical ? "flex-col" : ""}`}>
+      <div style={primarySize} className="relative">
         <MapView>
           {cameras
             .filter((c) => c.lat != null)
@@ -122,12 +140,14 @@ export function ViewerLayout() {
       {/* Resizable divider */}
       <div
         onMouseDown={handleMouseDown}
-        className="w-1.5 bg-gray-700 hover:bg-blue-500 cursor-col-resize flex-shrink-0 flex items-center justify-center"
+        className={`bg-gray-700 hover:bg-blue-500 flex-shrink-0 flex items-center justify-center ${
+          isVertical ? "h-1.5 w-full cursor-row-resize" : "w-1.5 h-full cursor-col-resize"
+        }`}
       >
-        <div className="w-0.5 h-8 bg-gray-500 rounded" />
+        <div className={isVertical ? "h-0.5 w-8 bg-gray-500 rounded" : "w-0.5 h-8 bg-gray-500 rounded"} />
       </div>
 
-      <div style={{ width: `${100 - splitPercent}%` }}>
+      <div style={secondarySize}>
         <StreamPlayer />
       </div>
     </div>

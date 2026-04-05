@@ -10,7 +10,7 @@ import { useScreenshot } from "./hooks/useScreenshot";
 import { useMediaRecorder, type BitrateSetting } from "./hooks/useMediaRecorder";
 import { useCameraStore } from "@/modules/camera/cameraStore";
 
-export function StreamPlayer() {
+export function StreamPlayer({ compact = false }: { compact?: boolean } = {}) {
   const streamInfo = useStreamStore((s) => s.streamInfo);
   const loading = useStreamStore((s) => s.loading);
   const error = useStreamStore((s) => s.error);
@@ -100,8 +100,8 @@ export function StreamPlayer() {
         muted
         className="max-h-full max-w-full"
       />
-      {race.active && <StatsWidget stats={stats} />}
-      {race.active && (
+      {!compact && race.active && <StatsWidget stats={stats} />}
+      {!compact && race.active && (
         <div
           className={`transition-opacity duration-300 ${
             controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -110,7 +110,7 @@ export function StreamPlayer() {
           <ControlsBar screenshot={screenshot} recorder={recorder} />
         </div>
       )}
-      {race.active && (
+      {!compact && race.active && (
         <BitrateSettingsPopover value={bitrateSetting} onChange={setBitrateSetting} />
       )}
       {race.phase === "error" && (

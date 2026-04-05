@@ -39,7 +39,7 @@ export function MiniStreamPreview() {
   if (!camera || !hasValidUrl) return null;
 
   return (
-    <div className="absolute top-3 right-3 z-[1000] w-64 rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-black">
+    <div className="absolute top-3 right-3 z-[1000] w-96 rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-black">
       <div className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-900 border-b border-gray-700">
         <div
           className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -55,7 +55,7 @@ export function MiniStreamPreview() {
         </button>
       </div>
       <div className="aspect-video">
-        <StreamPlayer />
+        <StreamPlayer compact />
       </div>
     </div>
   );

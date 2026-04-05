@@ -1,109 +1,26 @@
-import { useEffect, useRef } from "react";
+// web/src/modules/stream/StreamPlayer.tsx
+import { useCallback, useState } from "react";
 import { useStreamStore } from "./streamStore";
+import { useTransportRace } from "./transports/useTransportRace";
 
 export function StreamPlayer() {
   const streamInfo = useStreamStore((s) => s.streamInfo);
   const loading = useStreamStore((s) => s.loading);
   const error = useStreamStore((s) => s.error);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
-  useEffect(() => {
-    if (!streamInfo || !videoRef.current) return;
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  const videoRef = useCallback((el: HTMLVideoElement | null) => {
+    setVideoEl(el);
+  }, []);
 
-    const video = videoRef.current;
-    const wsUrl = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}${streamInfo.ws_url}`;
-    const ws = new WebSocket(wsUrl);
-    ws.binaryType = "arraybuffer";
+  const wsUrl = streamInfo
+    ? `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}${streamInfo.ws_url}`
+    : null;
+  const webrtcUrl = streamInfo
+    ? `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}${streamInfo.webrtc_url}`
+    : null;
 
-    let mediaSource: MediaSource | null = null;
-    let sourceBuffer: SourceBuffer | null = null;
-    const queue: ArrayBuffer[] = [];
-
-    // go2rtc expects an exact set of codec tokens. It parses them literally,
-    // so only these strings trigger the right media selection.
-    // See pkg/mp4/mime.go in AlexxIT/go2rtc.
-    const candidateCodecs = [
-      "avc1.640029",
-      "avc1.64002A",
-      "avc1.640033",
-      "hvc1.1.6.L153.B0",
-      "mp4a.40.2",
-      "mp4a.40.5",
-      "flac",
-      "opus",
-    ];
-
-    const appendNext = () => {
-      if (!sourceBuffer || sourceBuffer.updating) return;
-      const buf = queue.shift();
-      if (buf) {
-        try {
-          sourceBuffer.appendBuffer(buf);
-        } catch (e) {
-          console.error("appendBuffer failed:", e);
-        }
-      }
-    };
-
-    ws.onopen = () => {
-      const supported = candidateCodecs.filter((c) =>
-        MediaSource.isTypeSupported(`video/mp4; codecs="${c}"`)
-      );
-      // go2rtc expects raw comma-joined codec tokens, NOT a full MIME string.
-      const value = supported.join(",");
-      console.log("Sending MSE codecs:", value);
-      ws.send(JSON.stringify({ type: "mse", value }));
-    };
-
-    ws.onmessage = (event) => {
-      if (typeof event.data === "string") {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "mse") {
-          mediaSource = new MediaSource();
-          video.src = URL.createObjectURL(mediaSource);
-          mediaSource.addEventListener("sourceopen", () => {
-            try {
-              sourceBuffer = mediaSource!.addSourceBuffer(msg.value);
-              sourceBuffer.mode = "segments";
-              sourceBuffer.addEventListener("updateend", appendNext);
-              appendNext();
-            } catch (e) {
-              console.error("MSE codec not supported:", msg.value, e);
-            }
-          });
-          video.play().catch(() => {});
-        } else if (msg.type === "error") {
-          console.error("go2rtc error:", msg.value);
-        }
-      } else if (event.data instanceof ArrayBuffer) {
-        if (sourceBuffer && !sourceBuffer.updating && queue.length === 0) {
-          try {
-            sourceBuffer.appendBuffer(event.data);
-          } catch (e) {
-            queue.push(event.data);
-          }
-        } else {
-          queue.push(event.data);
-        }
-      }
-    };
-
-    ws.onerror = (e) => {
-      console.error("WebSocket error:", e);
-    };
-
-    ws.onclose = (e) => {
-      console.log("WebSocket closed:", e.code, e.reason);
-    };
-
-    return () => {
-      ws.close();
-      if (mediaSource && mediaSource.readyState === "open") {
-        try { mediaSource.endOfStream(); } catch {}
-      }
-      video.src = "";
-    };
-  }, [streamInfo]);
+  const race = useTransportRace(videoEl, wsUrl, webrtcUrl);
 
   if (loading) {
     return (
@@ -133,7 +50,7 @@ export function StreamPlayer() {
   }
 
   return (
-    <div className="h-full bg-black flex items-center justify-center">
+    <div className="h-full bg-black flex items-center justify-center relative">
       <video
         ref={videoRef}
         autoPlay
@@ -141,6 +58,11 @@ export function StreamPlayer() {
         muted
         className="max-h-full max-w-full"
       />
+      {race.phase === "error" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-red-400 text-center p-4">
+          Не удалось подключиться: {race.error}
+        </div>
+      )}
     </div>
   );
 }

@@ -29,7 +29,7 @@ function IconButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`min-w-10 h-10 px-2 flex items-center justify-center gap-1 rounded bg-black/60 hover:bg-black/80 text-white text-xs disabled:opacity-40 disabled:cursor-not-allowed transition pointer-events-auto ${className}`}
+      className={`min-w-10 h-10 px-3 flex items-center justify-center gap-1.5 rounded-lg bg-slate-700/60 hover:bg-slate-600/60 text-white text-xs font-medium shadow-md shadow-black/30 ring-1 ring-white/15 hover:ring-white/25 backdrop-blur-sm active:scale-95 disabled:opacity-40 disabled:active:scale-100 transition-all duration-150 pointer-events-auto ${className}`}
     >
       {children}
     </button>
@@ -87,19 +87,31 @@ export function ControlsBar({ screenshot, recorder }: ControlsBarProps) {
 
   return (
     <div className="absolute left-2 bottom-2 flex gap-2 items-center">
-      <IconButton onClick={onScreenshot} disabled={!screenshot.isReady} title="Скриншот">
+      <IconButton
+        onClick={onScreenshot}
+        disabled={!screenshot.isReady}
+        title="Сохранить скриншот"
+        className="!bg-blue-500/70 hover:!bg-blue-400/70"
+      >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
           <circle cx="12" cy="13" r="4" />
         </svg>
+        <span>Скриншот</span>
       </IconButton>
 
       {screenshot.canCopy && (
-        <IconButton onClick={onCopy} disabled={!screenshot.isReady} title="Скопировать кадр в буфер обмена">
+        <IconButton
+          onClick={onCopy}
+          disabled={!screenshot.isReady}
+          title="Скопировать кадр в буфер обмена"
+          className="!bg-blue-500/70 hover:!bg-blue-400/70"
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="9" y="2" width="6" height="4" rx="1" />
             <path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3" />
           </svg>
+          <span>Копировать</span>
         </IconButton>
       )}
 
@@ -109,7 +121,7 @@ export function ControlsBar({ screenshot, recorder }: ControlsBarProps) {
             onClick={onReplay}
             disabled={recorder.replayState === "capturing"}
             title="Сохранить реплей +/- 10 секунд"
-            className="!bg-green-700/80 hover:!bg-green-600/80"
+            className="!bg-emerald-500/70 hover:!bg-emerald-400/70"
           >
             {recorder.replayState === "capturing" ? (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
@@ -131,7 +143,7 @@ export function ControlsBar({ screenshot, recorder }: ControlsBarProps) {
             onClick={onToggleRecord}
             disabled={!screenshot.isReady}
             title={recorder.isRecording ? "Остановить запись" : "Начать запись"}
-            className={recorder.isRecording ? "!bg-red-700/80 hover:!bg-red-600/80" : "!bg-red-600/80 hover:!bg-red-500/80"}
+            className={recorder.isRecording ? "!bg-rose-500/70 hover:!bg-rose-400/70" : "!bg-rose-500/70 hover:!bg-rose-400/70"}
           >
             {recorder.isRecording ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">

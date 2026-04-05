@@ -77,7 +77,7 @@ export function ViewerLayout() {
             stopStream();
             selectCamera(null);
           }}
-          className="absolute top-3 left-3 z-10 bg-gray-800/80 text-white px-3 py-1.5 rounded cursor-pointer"
+          className="absolute top-3 left-3 z-10 bg-slate-700/75 hover:bg-slate-600/75 text-white text-sm px-3 py-1.5 rounded-lg shadow-md shadow-black/30 ring-1 ring-white/15 hover:ring-white/25 backdrop-blur-sm active:scale-95 transition-all duration-150"
         >
           ← Карта
         </button>
@@ -103,7 +103,7 @@ export function ViewerLayout() {
         </MapView>
         <button
           onClick={() => setMode("edit")}
-          className="absolute bottom-3 left-3 z-[1000] bg-gray-800 text-white text-sm px-3 py-1.5 rounded shadow"
+          className="absolute bottom-3 left-3 z-[1000] bg-slate-700/85 hover:bg-slate-600/85 text-white text-sm px-3 py-1.5 rounded-lg shadow-md shadow-black/30 ring-1 ring-white/15 hover:ring-white/25 backdrop-blur-sm active:scale-95 transition-all duration-150"
         >
           ✏️ Редактирование
         </button>
@@ -131,7 +131,7 @@ export function ViewerLayout() {
         </MapView>
         <button
           onClick={() => setMode("edit")}
-          className="absolute bottom-3 left-3 z-[1000] bg-gray-800 text-white text-sm px-3 py-1.5 rounded shadow"
+          className="absolute bottom-3 left-3 z-[1000] bg-slate-700/85 hover:bg-slate-600/85 text-white text-sm px-3 py-1.5 rounded-lg shadow-md shadow-black/30 ring-1 ring-white/15 hover:ring-white/25 backdrop-blur-sm active:scale-95 transition-all duration-150"
         >
           ✏️ Редактирование
         </button>

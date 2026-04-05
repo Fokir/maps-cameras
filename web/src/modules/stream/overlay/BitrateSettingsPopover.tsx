@@ -51,7 +51,7 @@ export function BitrateSettingsPopover({
         type="button"
         onClick={() => setOpen((o) => !o)}
         title="Настройки записи"
-        className="w-9 h-9 flex items-center justify-center rounded bg-black/60 hover:bg-black/80 text-white pointer-events-auto"
+        className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-700/60 hover:bg-slate-600/60 text-white shadow-md shadow-black/30 ring-1 ring-white/15 hover:ring-white/25 backdrop-blur-sm active:scale-95 transition-all duration-150 pointer-events-auto"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="12" cy="12" r="3" />

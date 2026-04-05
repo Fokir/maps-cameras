@@ -97,7 +97,7 @@ export function CameraForm() {
               <button
                 key={c}
                 onClick={() => setColor(c)}
-                className="w-7 h-7 rounded transition"
+                className="w-7 h-7 rounded-lg shadow-sm shadow-black/30 ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 active:scale-95 transition-all duration-150"
                 style={{
                   backgroundColor: c,
                   border: c === color ? "3px solid white" : "2px solid transparent",
@@ -112,14 +112,14 @@ export function CameraForm() {
         <button
           onClick={handleSave}
           disabled={!name || !rtspUrl}
-          className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm py-2 rounded font-medium"
+          className="flex-1 bg-blue-500/80 hover:bg-blue-400/80 disabled:opacity-40 disabled:active:scale-100 text-white text-sm py-2 rounded-lg font-medium shadow-md shadow-black/20 ring-1 ring-white/15 hover:ring-white/25 active:scale-[0.98] transition-all duration-150"
         >
           Сохранить
         </button>
         {!isNew && (
           <button
             onClick={handleDelete}
-            className="flex-1 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-800/50 text-sm py-2 rounded"
+            className="flex-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 ring-1 ring-rose-400/40 hover:ring-rose-300/60 text-sm py-2 rounded-lg shadow-sm shadow-black/20 active:scale-[0.98] transition-all duration-150"
           >
             Удалить
           </button>

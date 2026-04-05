@@ -128,7 +128,7 @@ export function EditorLayout() {
 
         <button
           onClick={handleExitEdit}
-          className="absolute bottom-3 left-3 z-[1000] bg-amber-600 hover:bg-amber-500 text-gray-900 text-sm px-3 py-1.5 rounded shadow font-medium"
+          className="absolute bottom-3 left-3 z-[1000] bg-amber-400/85 hover:bg-amber-300/85 text-amber-950 text-sm px-3 py-1.5 rounded-lg shadow-md shadow-black/30 ring-1 ring-white/25 hover:ring-white/40 backdrop-blur-sm active:scale-95 transition-all duration-150 font-medium"
         >
           👁 Просмотр
         </button>

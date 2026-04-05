@@ -35,7 +35,7 @@ export function ImportM3U() {
       />
       <button
         onClick={() => fileRef.current?.click()}
-        className="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm py-2 rounded"
+        className="w-full bg-slate-600/70 hover:bg-slate-500/70 text-slate-100 text-sm py-2 rounded-lg shadow-md shadow-black/20 ring-1 ring-white/10 hover:ring-white/20 active:scale-[0.98] transition-all duration-150"
       >
         📥 Импорт M3U
       </button>

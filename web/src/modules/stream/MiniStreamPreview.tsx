@@ -48,7 +48,7 @@ export function MiniStreamPreview() {
         <span className="text-xs text-gray-200 truncate flex-1">{camera.name}</span>
         <button
           onClick={() => useCameraStore.getState().selectCamera(null)}
-          className="text-gray-500 hover:text-gray-300 text-xs leading-none"
+          className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 text-xs leading-none"
           title="Закрыть превью"
         >
           ✕

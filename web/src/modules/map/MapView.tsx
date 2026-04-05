@@ -94,7 +94,7 @@ export function MapView({ children }: { children?: React.ReactNode }) {
 
       <button
         onClick={toggleTileLayer}
-        className="absolute bottom-3 right-3 z-[1000] bg-gray-800 text-white text-sm px-3 py-1.5 rounded shadow hover:bg-gray-700"
+        className="absolute bottom-3 right-3 z-[1000] bg-slate-700/85 hover:bg-slate-600/85 text-white text-sm px-3 py-1.5 rounded-lg shadow-md shadow-black/30 ring-1 ring-white/15 hover:ring-white/25 backdrop-blur-sm active:scale-95 transition-all duration-150"
       >
         {tileLayer === "streets" ? "Спутник" : "Улицы"}
       </button>

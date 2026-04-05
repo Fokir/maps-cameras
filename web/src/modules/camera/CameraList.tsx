@@ -59,7 +59,7 @@ export function CameraList() {
 
       <button
         onClick={() => setEditingId("new")}
-        className="mt-3 mr-2 bg-blue-600 hover:bg-blue-500 text-white text-sm py-2 rounded font-medium"
+        className="mt-3 mr-2 px-3 bg-blue-500/80 hover:bg-blue-400/80 text-white text-sm py-2 rounded-lg font-medium shadow-md shadow-black/20 ring-1 ring-white/15 hover:ring-white/25 active:scale-[0.98] transition-all duration-150"
       >
         + Добавить
       </button>

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { pickRecordingMimeType, type RecordingMimeType } from "../lib/mimeType";
 import { RingBuffer } from "../lib/ringBuffer";
 import { buildFilename } from "../lib/filename";
-import { downloadBlob } from "../lib/fileSaver";
+import { downloadBlob, openWritableStream } from "../lib/fileSaver";
 
 const RING_RETENTION_MS = 10_000;
 const RING_CHUNK_MS = 500;
@@ -90,8 +90,63 @@ export function useMediaRecorder(
   // Placeholder APIs — implemented in next tasks.
   const [replayState, setReplayState] = useState<ReplayState>("idle");
   const replayRecorderRef = useRef<MediaRecorder | null>(null);
-  const [isRecording] = useState(false);
-  const [recordingSeconds] = useState(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const activeRecorderRef = useRef<MediaRecorder | null>(null);
+  const activeChunksRef = useRef<Blob[]>([]);
+  const activeWritableRef = useRef<Awaited<ReturnType<typeof openWritableStream>>>(null);
+  const activeFilenameRef = useRef<string>("");
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const warnedAtNineRef = useRef(false);
+
+  const finalizeActiveRecording = useCallback(
+    async (_auto: boolean) => {
+      const recorder = activeRecorderRef.current;
+      if (!recorder) return;
+      try {
+        if (recorder.state !== "inactive") {
+          await new Promise<void>((resolve) => {
+            recorder.onstop = () => resolve();
+            try {
+              recorder.stop();
+            } catch {
+              resolve();
+            }
+          });
+        }
+      } catch {}
+
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+
+      const secondsAtStop = recordingSeconds;
+      const writable = activeWritableRef.current;
+      const chunks = activeChunksRef.current;
+      const filename = activeFilenameRef.current;
+
+      activeRecorderRef.current = null;
+      activeChunksRef.current = [];
+      activeWritableRef.current = null;
+      activeFilenameRef.current = "";
+      warnedAtNineRef.current = false;
+      setIsRecording(false);
+      setRecordingSeconds(0);
+
+      if (writable) {
+        try {
+          await writable.close();
+        } catch {}
+        return;
+      }
+
+      if (secondsAtStop < 1 || chunks.length === 0) return;
+      const combined = new Blob(chunks, { type: mimeType?.mimeType ?? "video/webm" });
+      await downloadBlob(combined, filename);
+    },
+    [mimeType, recordingSeconds]
+  );
 
   const takeReplay = useCallback(async () => {
     if (!videoEl || !mimeType || replayRecorderRef.current) return;
@@ -154,11 +209,81 @@ export function useMediaRecorder(
     await downloadBlob(blob, filename);
   }, [videoEl, transportReady, mimeType, measuredBitrate, bitrateSetting, cameraName]);
   const startRecording = useCallback(async () => {
-    // Implemented in Task 18.
-  }, []);
+    if (!videoEl || !mimeType || activeRecorderRef.current) return;
+    if (!transportReady) return;
+
+    const filename = buildFilename(cameraName, mimeType.ext);
+    activeFilenameRef.current = filename;
+
+    // Try File System Access API first.
+    const writable = await openWritableStream(filename);
+    if (writable === null && typeof window.showSaveFilePicker === "function") {
+      // User cancelled the native dialog — abort silently.
+      activeFilenameRef.current = "";
+      return;
+    }
+    activeWritableRef.current = writable;
+
+    const stream = (videoEl as HTMLVideoElement & { captureStream(): MediaStream }).captureStream();
+    const bitrate = resolveBitrate(bitrateSetting, measuredBitrate);
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, {
+        mimeType: mimeType.mimeType,
+        videoBitsPerSecond: bitrate,
+      });
+    } catch (e) {
+      console.error("Active recorder init failed:", e);
+      if (writable) await writable.close().catch(() => {});
+      activeWritableRef.current = null;
+      activeFilenameRef.current = "";
+      throw e;
+    }
+
+    recorder.ondataavailable = async (ev) => {
+      if (!ev.data || ev.data.size === 0) return;
+      if (activeWritableRef.current) {
+        try {
+          await activeWritableRef.current.write(ev.data);
+        } catch (e) {
+          console.error("writable.write failed:", e);
+        }
+      } else {
+        activeChunksRef.current.push(ev.data);
+      }
+    };
+
+    try {
+      recorder.start(1000);
+    } catch (e) {
+      if (writable) await writable.close().catch(() => {});
+      activeWritableRef.current = null;
+      activeFilenameRef.current = "";
+      throw e;
+    }
+
+    activeRecorderRef.current = recorder;
+    setIsRecording(true);
+    setRecordingSeconds(0);
+    warnedAtNineRef.current = false;
+
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingSeconds((s) => {
+        const next = s + 1;
+        if (next === 540 && !warnedAtNineRef.current) {
+          warnedAtNineRef.current = true;
+          window.dispatchEvent(new CustomEvent("recording-warning-9min"));
+        }
+        if (next >= 600) {
+          queueMicrotask(() => finalizeActiveRecording(true));
+        }
+        return next;
+      });
+    }, 1000);
+  }, [videoEl, transportReady, mimeType, cameraName, bitrateSetting, measuredBitrate, finalizeActiveRecording]);
   const stopRecording = useCallback(async () => {
-    // Implemented in Task 18.
-  }, []);
+    await finalizeActiveRecording(false);
+  }, [finalizeActiveRecording]);
 
   useEffect(() => {
     return () => {
@@ -167,6 +292,16 @@ export function useMediaRecorder(
           replayRecorderRef.current.stop();
         } catch {}
         replayRecorderRef.current = null;
+      }
+      if (activeRecorderRef.current) {
+        try {
+          activeRecorderRef.current.stop();
+        } catch {}
+        activeRecorderRef.current = null;
+      }
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
       }
     };
   }, []);

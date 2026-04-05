@@ -158,7 +158,12 @@ export function ControlsBar({ screenshot, recorder }: ControlsBarProps) {
             )}
           </IconButton>
 
-          {recorder.isRecording && <RecordingIndicator seconds={recorder.recordingSeconds} />}
+          {recorder.isRecording && (
+            <RecordingIndicator
+              seconds={recorder.recordingSeconds}
+              unlimited={recorder.recordingUnlimited}
+            />
+          )}
         </>
       )}
     </div>

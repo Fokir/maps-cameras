@@ -33,6 +33,10 @@ export interface MediaRecorderApi {
   takeReplay(): Promise<void>;
   isRecording: boolean;
   recordingSeconds: number;
+  /** True when the current recording writes straight to disk (Chrome/Edge FS
+   * API) and therefore has no 10-minute limit. False when falling back to
+   * in-memory capture (Firefox/Safari). */
+  recordingUnlimited: boolean;
   startRecording(): Promise<void>;
   stopRecording(): Promise<void>;
 }
@@ -190,6 +194,7 @@ export function useMediaRecorder(
   const [replayState, setReplayState] = useState<ReplayState>("idle");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordingUnlimited, setRecordingUnlimited] = useState(false);
   const activeRecorderRef = useRef<MediaRecorder | null>(null);
   const activeChunksRef = useRef<Blob[]>([]);
   const activeWritableRef = useRef<Awaited<ReturnType<typeof openWritableStream>>>(null);
@@ -231,6 +236,7 @@ export function useMediaRecorder(
       warnedAtNineRef.current = false;
       setIsRecording(false);
       setRecordingSeconds(0);
+      setRecordingUnlimited(false);
 
       if (writable) {
         try {
@@ -346,19 +352,26 @@ export function useMediaRecorder(
     }
 
     activeRecorderRef.current = recorder;
+    // In-memory fallback (Firefox/Safari) needs the 10-minute limit to avoid
+    // exhausting RAM. File System Access path (Chrome/Edge) streams straight
+    // to disk, so the recording can run as long as the user wants.
+    const unlimited = activeWritableRef.current !== null;
     setIsRecording(true);
     setRecordingSeconds(0);
+    setRecordingUnlimited(unlimited);
     warnedAtNineRef.current = false;
 
     recordingTimerRef.current = setInterval(() => {
       setRecordingSeconds((s) => {
         const next = s + 1;
-        if (next === 540 && !warnedAtNineRef.current) {
-          warnedAtNineRef.current = true;
-          window.dispatchEvent(new CustomEvent("recording-warning-9min"));
-        }
-        if (next >= 600) {
-          queueMicrotask(() => finalizeActiveRecording(true));
+        if (!unlimited) {
+          if (next === 540 && !warnedAtNineRef.current) {
+            warnedAtNineRef.current = true;
+            window.dispatchEvent(new CustomEvent("recording-warning-9min"));
+          }
+          if (next >= 600) {
+            queueMicrotask(() => finalizeActiveRecording(true));
+          }
         }
         return next;
       });
@@ -400,6 +413,7 @@ export function useMediaRecorder(
     takeReplay,
     isRecording,
     recordingSeconds,
+    recordingUnlimited,
     startRecording,
     stopRecording,
   };

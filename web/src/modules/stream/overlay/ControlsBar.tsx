@@ -115,30 +115,32 @@ export function ControlsBar({ screenshot, recorder }: ControlsBarProps) {
         </IconButton>
       )}
 
+      {recorder.replayAvailable && (
+        <IconButton
+          onClick={onReplay}
+          disabled={recorder.replayState === "capturing"}
+          title="Сохранить реплей +/- 10 секунд"
+          className="!bg-emerald-500/70 hover:!bg-emerald-400/70"
+        >
+          {recorder.replayState === "capturing" ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+              <circle cx="12" cy="12" r="10" strokeDasharray="40 20" />
+            </svg>
+          ) : (
+            <>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 22 4 11c0-3 2-5 5-5l3-4 2 4c3 0 5 2 5 5l-2 11z" />
+                <circle cx="10" cy="16" r="1" />
+                <circle cx="14" cy="16" r="1" />
+              </svg>
+              <span>Реплей</span>
+            </>
+          )}
+        </IconButton>
+      )}
+
       {recorder.supported && (
         <>
-          <IconButton
-            onClick={onReplay}
-            disabled={recorder.replayState === "capturing"}
-            title="Сохранить реплей +/- 10 секунд"
-            className="!bg-emerald-500/70 hover:!bg-emerald-400/70"
-          >
-            {recorder.replayState === "capturing" ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                <circle cx="12" cy="12" r="10" strokeDasharray="40 20" />
-              </svg>
-            ) : (
-              <>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 22 4 11c0-3 2-5 5-5l3-4 2 4c3 0 5 2 5 5l-2 11z" />
-                  <circle cx="10" cy="16" r="1" />
-                  <circle cx="14" cy="16" r="1" />
-                </svg>
-                <span>Реплей</span>
-              </>
-            )}
-          </IconButton>
-
           <IconButton
             onClick={onToggleRecord}
             disabled={!screenshot.isReady}

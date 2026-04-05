@@ -4,12 +4,17 @@ import { pickRecordingMimeType, type RecordingMimeType } from "../lib/mimeType";
 import { buildFilename } from "../lib/filename";
 import { downloadBlob, openWritableStream } from "../lib/fileSaver";
 
-// Instant replay strategy: run two overlapping MediaRecorders, rotating every
-// REPLAY_ROTATION_MS seconds. At any moment, at least one of them has been
-// running for REPLAY_ROTATION_MS..2*REPLAY_ROTATION_MS seconds and therefore
-// contains 10+ seconds of past media. On a replay click we let that recorder
-// run for another 10 seconds, call .stop() to flush a self-contained WebM,
-// and hand the user a single coherent file without any cluster splicing.
+// Instant replay strategy: run N overlapping MediaRecorders staggered by
+// REPLAY_ROTATION_MS. At any moment, the oldest slot has been running for
+// (N-1)*K..N*K seconds and therefore contains at least (N-1)*K seconds of
+// past media. On a replay click we reserve that slot, let it run for another
+// REPLAY_POST_MS seconds, call .stop() to flush a self-contained file, and
+// hand the user a single coherent video without any cluster splicing.
+// Slot count is user-configurable (2/3/4); more slots = longer past media
+// at the cost of more concurrent encoders. Desktop-only; mobile disables
+// replay entirely to save battery.
+export const REPLAY_SLOT_COUNT_DEFAULT = 2;
+export type ReplaySlotCount = 2 | 3 | 4;
 const REPLAY_ROTATION_MS = 10_000;
 const REPLAY_POST_MS = 10_000;
 const MIN_BITRATE = 1_000_000;
@@ -22,10 +27,10 @@ export type ReplayState = "idle" | "capturing";
 export interface MediaRecorderApi {
   supported: boolean;
   mimeType: RecordingMimeType | null;
-  // Replay (added in later task)
+  /** True when instant replay is available (desktop only). */
+  replayAvailable: boolean;
   replayState: ReplayState;
   takeReplay(): Promise<void>;
-  // Manual recording (added in later task)
   isRecording: boolean;
   recordingSeconds: number;
   startRecording(): Promise<void>;
@@ -43,7 +48,9 @@ export function useMediaRecorder(
   transportReady: boolean,
   cameraName: string,
   measuredBitrate: number | null,
-  bitrateSetting: BitrateSetting
+  bitrateSetting: BitrateSetting,
+  replayEnabled: boolean,
+  replaySlotCount: ReplaySlotCount
 ): MediaRecorderApi {
   const mimeTypeRef = useRef<RecordingMimeType | null>(null);
   if (mimeTypeRef.current === null) mimeTypeRef.current = pickRecordingMimeType();
@@ -69,11 +76,12 @@ export function useMediaRecorder(
     measuredBitrateRef.current = measuredBitrate;
   }, [measuredBitrate]);
 
-  // Replay recorder lifecycle: run two overlapping recorders while transport
-  // is ready, rotating one every REPLAY_ROTATION_MS so the oldest non-reserved
-  // slot always has at least REPLAY_ROTATION_MS of past media.
+  // Replay recorder lifecycle: run REPLAY_SLOT_COUNT overlapping recorders
+  // while transport is ready and replay is enabled (desktop only), rotating
+  // one every REPLAY_ROTATION_MS so the oldest non-reserved slot always has
+  // at least (N-1)*REPLAY_ROTATION_MS of past media.
   useEffect(() => {
-    if (!videoEl || !transportReady || !mimeType) return;
+    if (!videoEl || !transportReady || !mimeType || !replayEnabled) return;
 
     let cancelled = false;
 
@@ -121,20 +129,22 @@ export function useMediaRecorder(
       const slot = startSlot();
       if (!slot) return;
       replaySlotsRef.current.push(slot);
-      // Retire any non-reserved slot older than 2 rotations (20s). Reserved
-      // slots belong to an in-flight takeReplay() and will be stopped there.
-      const cutoff = Date.now() - 2 * REPLAY_ROTATION_MS;
-      const keep: ReplaySlot[] = [];
-      for (const s of replaySlotsRef.current) {
-        if (s.reserved || s.startedAt >= cutoff) {
-          keep.push(s);
-        } else {
+      // Keep exactly replaySlotCount non-reserved slots; retire the oldest
+      // excess ones. Reserved slots (in-flight takeReplay) are untouched.
+      const nonReserved = replaySlotsRef.current
+        .filter((s) => !s.reserved)
+        .sort((a, b) => a.startedAt - b.startedAt);
+      const excess = Math.max(0, nonReserved.length - replaySlotCount);
+      const toRetire = new Set(nonReserved.slice(0, excess));
+      replaySlotsRef.current = replaySlotsRef.current.filter((s) => {
+        if (toRetire.has(s)) {
           try {
             if (s.recorder.state !== "inactive") s.recorder.stop();
           } catch {}
+          return false;
         }
-      }
-      replaySlotsRef.current = keep;
+        return true;
+      });
     };
 
     const bootstrap = () => {
@@ -175,7 +185,7 @@ export function useMediaRecorder(
     // measuredBitrate intentionally excluded — it updates every second from
     // stats and would tear down the replay slots on every tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoEl, transportReady, mimeType, bitrateSetting]);
+  }, [videoEl, transportReady, mimeType, bitrateSetting, replayEnabled, replaySlotCount]);
 
   const [replayState, setReplayState] = useState<ReplayState>("idle");
   const [isRecording, setIsRecording] = useState(false);
@@ -385,6 +395,7 @@ export function useMediaRecorder(
   return {
     supported: mimeType !== null,
     mimeType,
+    replayAvailable: replayEnabled && mimeType !== null,
     replayState,
     takeReplay,
     isRecording,

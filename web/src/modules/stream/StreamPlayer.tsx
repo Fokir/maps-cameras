@@ -5,10 +5,19 @@ import { useTransportRace } from "./transports/useTransportRace";
 import { useStreamStats } from "./hooks/useStreamStats";
 import { StatsWidget } from "./overlay/StatsWidget";
 import { ControlsBar } from "./overlay/ControlsBar";
-import { BitrateSettingsPopover, loadBitrateSetting } from "./overlay/BitrateSettingsPopover";
+import {
+  BitrateSettingsPopover,
+  loadBitrateSetting,
+  loadReplaySlotCount,
+} from "./overlay/BitrateSettingsPopover";
 import { useScreenshot } from "./hooks/useScreenshot";
-import { useMediaRecorder, type BitrateSetting } from "./hooks/useMediaRecorder";
+import {
+  useMediaRecorder,
+  type BitrateSetting,
+  type ReplaySlotCount,
+} from "./hooks/useMediaRecorder";
 import { useCameraStore } from "@/modules/camera/cameraStore";
+import { useMediaQuery } from "@/shared/hooks";
 
 export function StreamPlayer({ compact = false }: { compact?: boolean } = {}) {
   const streamInfo = useStreamStore((s) => s.streamInfo);
@@ -20,6 +29,10 @@ export function StreamPlayer({ compact = false }: { compact?: boolean } = {}) {
   const cameraName = cameras.find((c) => c.id === activeCameraId)?.name ?? "camera";
 
   const [bitrateSetting, setBitrateSetting] = useState<BitrateSetting>(loadBitrateSetting);
+  const [replaySlotCount, setReplaySlotCount] = useState<ReplaySlotCount>(loadReplaySlotCount);
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  // Replay is desktop-only: the rotating MediaRecorders burn CPU + battery.
+  const replayEnabled = !compact && !isMobile;
 
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const videoRef = useCallback((el: HTMLVideoElement | null) => {
@@ -41,7 +54,9 @@ export function StreamPlayer({ compact = false }: { compact?: boolean } = {}) {
     race.active !== null,
     cameraName,
     stats.bitrate,
-    bitrateSetting
+    bitrateSetting,
+    replayEnabled,
+    replaySlotCount
   );
 
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -111,7 +126,13 @@ export function StreamPlayer({ compact = false }: { compact?: boolean } = {}) {
         </div>
       )}
       {!compact && race.active && (
-        <BitrateSettingsPopover value={bitrateSetting} onChange={setBitrateSetting} />
+        <BitrateSettingsPopover
+          bitrate={bitrateSetting}
+          onBitrateChange={setBitrateSetting}
+          slotCount={replaySlotCount}
+          onSlotCountChange={setReplaySlotCount}
+          replayAvailable={replayEnabled}
+        />
       )}
       {race.phase === "error" && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-red-400 text-center p-4">

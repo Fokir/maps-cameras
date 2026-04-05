@@ -1,30 +1,52 @@
 // web/src/modules/stream/overlay/BitrateSettingsPopover.tsx
 import { useEffect, useRef, useState } from "react";
-import type { BitrateSetting } from "../hooks/useMediaRecorder";
+import type { BitrateSetting, ReplaySlotCount } from "../hooks/useMediaRecorder";
+import { REPLAY_SLOT_COUNT_DEFAULT } from "../hooks/useMediaRecorder";
 
-const STORAGE_KEY = "maps-cameras.recordingBitrate";
+const BITRATE_STORAGE_KEY = "maps-cameras.recordingBitrate";
+const REPLAY_SLOTS_STORAGE_KEY = "maps-cameras.replaySlotCount";
 
-const options: { value: BitrateSetting; label: string }[] = [
+const bitrateOptions: { value: BitrateSetting; label: string }[] = [
   { value: "auto", label: "Авто (рекомендуется)" },
   { value: 2_000_000, label: "2 Mbps — низкое" },
   { value: 4_000_000, label: "4 Mbps — среднее" },
   { value: 8_000_000, label: "8 Mbps — высокое" },
 ];
 
+const slotOptions: { value: ReplaySlotCount; label: string }[] = [
+  { value: 2, label: "2 слота — 20–30 с (рекомендуется)" },
+  { value: 3, label: "3 слота — 30–40 с" },
+  { value: 4, label: "4 слота — 40–50 с" },
+];
+
 export function loadBitrateSetting(): BitrateSetting {
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = localStorage.getItem(BITRATE_STORAGE_KEY);
   if (stored === "2000000" || stored === "4000000" || stored === "8000000") {
     return Number(stored) as BitrateSetting;
   }
   return "auto";
 }
 
+export function loadReplaySlotCount(): ReplaySlotCount {
+  const stored = localStorage.getItem(REPLAY_SLOTS_STORAGE_KEY);
+  if (stored === "2" || stored === "3" || stored === "4") {
+    return Number(stored) as ReplaySlotCount;
+  }
+  return REPLAY_SLOT_COUNT_DEFAULT as ReplaySlotCount;
+}
+
 export function BitrateSettingsPopover({
-  value,
-  onChange,
+  bitrate,
+  onBitrateChange,
+  slotCount,
+  onSlotCountChange,
+  replayAvailable,
 }: {
-  value: BitrateSetting;
-  onChange: (v: BitrateSetting) => void;
+  bitrate: BitrateSetting;
+  onBitrateChange: (v: BitrateSetting) => void;
+  slotCount: ReplaySlotCount;
+  onSlotCountChange: (v: ReplaySlotCount) => void;
+  replayAvailable: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -38,11 +60,15 @@ export function BitrateSettingsPopover({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
-  const handleChange = (v: BitrateSetting) => {
-    onChange(v);
-    if (v === "auto") localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, String(v));
-    setOpen(false);
+  const handleBitrateChange = (v: BitrateSetting) => {
+    onBitrateChange(v);
+    if (v === "auto") localStorage.removeItem(BITRATE_STORAGE_KEY);
+    else localStorage.setItem(BITRATE_STORAGE_KEY, String(v));
+  };
+
+  const handleSlotChange = (v: ReplaySlotCount) => {
+    onSlotCountChange(v);
+    localStorage.setItem(REPLAY_SLOTS_STORAGE_KEY, String(v));
   };
 
   return (
@@ -59,19 +85,44 @@ export function BitrateSettingsPopover({
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-60 bg-gray-900 text-white rounded shadow-lg p-3 text-sm pointer-events-auto">
-          <div className="text-xs text-gray-400 mb-2">Битрейт записи</div>
-          {options.map((opt) => (
+        <div className="absolute right-0 mt-2 w-72 bg-gray-900 text-white rounded-lg shadow-lg ring-1 ring-white/10 p-3 text-sm pointer-events-auto">
+          <div className="text-xs text-gray-400 mb-2 uppercase tracking-wide">Битрейт записи</div>
+          {bitrateOptions.map((opt) => (
             <label key={String(opt.value)} className="flex items-center gap-2 py-1 cursor-pointer">
               <input
                 type="radio"
                 name="bitrate"
-                checked={value === opt.value}
-                onChange={() => handleChange(opt.value)}
+                checked={bitrate === opt.value}
+                onChange={() => handleBitrateChange(opt.value)}
               />
               <span>{opt.label}</span>
             </label>
           ))}
+
+          {replayAvailable && (
+            <>
+              <div className="text-xs text-gray-400 mt-4 mb-2 uppercase tracking-wide">
+                Буфер реплея
+              </div>
+              {slotOptions.map((opt) => (
+                <label
+                  key={String(opt.value)}
+                  className="flex items-center gap-2 py-1 cursor-pointer"
+                >
+                  <input
+                    type="radio"
+                    name="replaySlots"
+                    checked={slotCount === opt.value}
+                    onChange={() => handleSlotChange(opt.value)}
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))}
+              <div className="text-xs text-gray-500 mt-1">
+                Больше слотов = больше прошлого в реплее, но больше нагрузка на CPU.
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

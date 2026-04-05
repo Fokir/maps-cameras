@@ -1,0 +1,29 @@
+# Build artifacts that should NOT pollute the Docker context.
+# The frontend is rebuilt inside the image via the `frontend` stage,
+# and cmd/server/dist is populated by copying from that stage.
+cmd/server/dist/
+web/dist/
+web/node_modules/
+
+# Binaries
+/maps-cameras
+/maps-cameras.exe
+server.exe
+
+# Local data
+data/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Docs and tooling we don't need in the image
+docs/
+.superpowers/

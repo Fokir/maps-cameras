@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pickRecordingMimeType, type RecordingMimeType } from "../lib/mimeType";
 import { RingBuffer } from "../lib/ringBuffer";
+import { buildFilename } from "../lib/filename";
+import { downloadBlob } from "../lib/fileSaver";
 
 const RING_RETENTION_MS = 10_000;
 const RING_CHUNK_MS = 500;
@@ -34,7 +36,7 @@ function resolveBitrate(setting: BitrateSetting, measuredBitrate: number | null)
 export function useMediaRecorder(
   videoEl: HTMLVideoElement | null,
   transportReady: boolean,
-  _cameraName: string,
+  cameraName: string,
   measuredBitrate: number | null,
   bitrateSetting: BitrateSetting
 ): MediaRecorderApi {
@@ -86,18 +88,87 @@ export function useMediaRecorder(
   }, [videoEl, transportReady, mimeType, measuredBitrate, bitrateSetting]);
 
   // Placeholder APIs — implemented in next tasks.
-  const [replayState] = useState<ReplayState>("idle");
+  const [replayState, setReplayState] = useState<ReplayState>("idle");
+  const replayRecorderRef = useRef<MediaRecorder | null>(null);
   const [isRecording] = useState(false);
   const [recordingSeconds] = useState(0);
 
   const takeReplay = useCallback(async () => {
-    // Implemented in Task 17.
-  }, []);
+    if (!videoEl || !mimeType || replayRecorderRef.current) return;
+    if (!transportReady) return;
+
+    setReplayState("capturing");
+
+    const pastSnapshot = bufferRef.current.snapshot().map((i) => i.blob);
+    const stream = (videoEl as HTMLVideoElement & { captureStream(): MediaStream }).captureStream();
+    const bitrate = resolveBitrate(bitrateSetting, measuredBitrate);
+
+    const futureChunks: Blob[] = [];
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, {
+        mimeType: mimeType.mimeType,
+        videoBitsPerSecond: bitrate,
+      });
+    } catch (e) {
+      console.error("Replay recorder init failed:", e);
+      setReplayState("idle");
+      throw e;
+    }
+
+    recorder.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0) futureChunks.push(ev.data);
+    };
+
+    const finish = (): Promise<Blob> =>
+      new Promise((resolve) => {
+        recorder.onstop = () => {
+          const combined = new Blob([...pastSnapshot, ...futureChunks], {
+            type: mimeType.mimeType,
+          });
+          resolve(combined);
+        };
+        try {
+          recorder.stop();
+        } catch {
+          resolve(new Blob([...pastSnapshot, ...futureChunks], { type: mimeType.mimeType }));
+        }
+      });
+
+    replayRecorderRef.current = recorder;
+    try {
+      recorder.start(500);
+    } catch (e) {
+      console.error("Replay recorder start failed:", e);
+      replayRecorderRef.current = null;
+      setReplayState("idle");
+      throw e;
+    }
+
+    await new Promise((r) => setTimeout(r, 10_000));
+    const blob = await finish();
+    replayRecorderRef.current = null;
+    setReplayState("idle");
+
+    const filename = buildFilename(cameraName, mimeType.ext);
+    await downloadBlob(blob, filename);
+  }, [videoEl, transportReady, mimeType, measuredBitrate, bitrateSetting, cameraName]);
   const startRecording = useCallback(async () => {
     // Implemented in Task 18.
   }, []);
   const stopRecording = useCallback(async () => {
     // Implemented in Task 18.
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (replayRecorderRef.current) {
+        try {
+          replayRecorderRef.current.stop();
+        } catch {}
+        replayRecorderRef.current = null;
+      }
+    };
   }, []);
 
   return {

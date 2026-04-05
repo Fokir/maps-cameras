@@ -80,16 +80,25 @@ export function useWebrtcTransport(
       if (disposed) return;
       const [stream] = event.streams;
       if (!stream) return;
-      videoEl.srcObject = stream;
-      videoEl.play().catch(() => {});
-      const onData = () => {
+      const track = event.track;
+
+      const attach = () => {
         if (readyFired || disposed) return;
         readyFired = true;
-        videoEl.removeEventListener("loadeddata", onData);
+        videoEl.srcObject = stream;
+        videoEl.play().catch(() => {});
         callbacks.onReady(handle);
       };
-      if (videoEl.readyState >= 2) onData();
-      else videoEl.addEventListener("loadeddata", onData);
+
+      // Wait until the track actually starts delivering media.
+      // `ontrack` fires at SDP negotiation time, long before real packets arrive.
+      // Attaching the MediaStream to <video> too early blanks out whatever other
+      // transport (e.g. MSE) was successfully showing a picture.
+      if (!track.muted) {
+        attach();
+      } else {
+        track.addEventListener("unmute", attach, { once: true });
+      }
     };
 
     pc.onicecandidate = (event) => {

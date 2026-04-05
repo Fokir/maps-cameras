@@ -47,6 +47,14 @@ export function useMediaRecorder(
   const bufferRef = useRef<RingBuffer>(new RingBuffer(RING_RETENTION_MS));
   const bufferRecorderRef = useRef<MediaRecorder | null>(null);
 
+  // Keep the latest measured bitrate in a ref so the buffer recorder effect
+  // does not re-run every second as stats update. The recorder uses the value
+  // captured at its init time.
+  const measuredBitrateRef = useRef<number | null>(measuredBitrate);
+  useEffect(() => {
+    measuredBitrateRef.current = measuredBitrate;
+  }, [measuredBitrate]);
+
   // Buffer recorder lifecycle: runs while transport is ready.
   useEffect(() => {
     if (!videoEl || !transportReady || !mimeType) return;
@@ -66,7 +74,7 @@ export function useMediaRecorder(
       }
 
       try {
-        const bitrate = resolveBitrate(bitrateSetting, measuredBitrate);
+        const bitrate = resolveBitrate(bitrateSetting, measuredBitrateRef.current);
         recorder = new MediaRecorder(stream, {
           mimeType: mimeType.mimeType,
           videoBitsPerSecond: bitrate,
@@ -110,7 +118,10 @@ export function useMediaRecorder(
       bufferRecorderRef.current = null;
       bufferRef.current.clear();
     };
-  }, [videoEl, transportReady, mimeType, measuredBitrate, bitrateSetting]);
+    // measuredBitrate intentionally excluded — it updates every second from stats
+    // and would reset the ring buffer, defeating the purpose of instant replay.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoEl, transportReady, mimeType, bitrateSetting]);
 
   // Placeholder APIs — implemented in next tasks.
   const [replayState, setReplayState] = useState<ReplayState>("idle");

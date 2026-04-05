@@ -35,7 +35,7 @@ RUN go build \
 
 # ---------- Stage 3: Runtime ----------
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates tzdata && \
+RUN apk add --no-cache ca-certificates tzdata su-exec && \
     addgroup -S app && adduser -S app -G app
 
 WORKDIR /app
@@ -44,7 +44,6 @@ COPY config.yaml.example /app/config.yaml.default
 
 # Writable data dir owned by the unprivileged user
 RUN mkdir -p /app/data && chown -R app:app /app
-USER app
 
 EXPOSE 8080
 VOLUME ["/app/data"]
@@ -53,5 +52,7 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --quiet --spider http://127.0.0.1:8080/api/cameras || exit 1
 
-# If no config mounted, fall back to the baked-in default.
-ENTRYPOINT ["/bin/sh", "-c", "test -f /app/config.yaml || cp /app/config.yaml.default /app/config.yaml; exec /app/maps-cameras /app/config.yaml"]
+# Entry runs as root to fix ownership of the bind-mounted /app/data
+# (whose host owner we cannot know at build time), then drops privileges
+# via su-exec. If no config is mounted, fall back to the baked-in default.
+ENTRYPOINT ["/bin/sh", "-c", "chown -R app:app /app/data 2>/dev/null || true; test -f /app/config.yaml || cp /app/config.yaml.default /app/config.yaml; exec su-exec app:app /app/maps-cameras /app/config.yaml"]

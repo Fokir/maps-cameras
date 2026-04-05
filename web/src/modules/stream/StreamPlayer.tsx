@@ -6,6 +6,7 @@ import { useStreamStats } from "./hooks/useStreamStats";
 import { StatsWidget } from "./overlay/StatsWidget";
 import { ControlsBar } from "./overlay/ControlsBar";
 import { useScreenshot } from "./hooks/useScreenshot";
+import { useMediaRecorder, type BitrateSetting } from "./hooks/useMediaRecorder";
 import { useCameraStore } from "@/modules/camera/cameraStore";
 
 export function StreamPlayer() {
@@ -16,6 +17,14 @@ export function StreamPlayer() {
   const activeCameraId = useStreamStore((s) => s.activeCameraId);
   const cameras = useCameraStore((s) => s.cameras);
   const cameraName = cameras.find((c) => c.id === activeCameraId)?.name ?? "camera";
+
+  const [bitrateSetting] = useState<BitrateSetting>(() => {
+    const stored = localStorage.getItem("maps-cameras.recordingBitrate");
+    if (stored === "2000000" || stored === "4000000" || stored === "8000000") {
+      return Number(stored) as BitrateSetting;
+    }
+    return "auto";
+  });
 
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const videoRef = useCallback((el: HTMLVideoElement | null) => {
@@ -32,6 +41,13 @@ export function StreamPlayer() {
   const race = useTransportRace(videoEl, wsUrl, webrtcUrl);
   const stats = useStreamStats(race.active, videoEl);
   const screenshot = useScreenshot(videoEl, cameraName);
+  const recorder = useMediaRecorder(
+    videoEl,
+    race.active !== null,
+    cameraName,
+    stats.bitrate,
+    bitrateSetting
+  );
 
   if (loading) {
     return (
@@ -70,7 +86,7 @@ export function StreamPlayer() {
         className="max-h-full max-w-full"
       />
       {race.active && <StatsWidget stats={stats} />}
-      {race.active && <ControlsBar screenshot={screenshot} />}
+      {race.active && <ControlsBar screenshot={screenshot} recorder={recorder} />}
       {race.phase === "error" && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-red-400 text-center p-4">
           Не удалось подключиться: {race.error}

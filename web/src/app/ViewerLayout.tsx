@@ -77,7 +77,7 @@ export function ViewerLayout() {
             stopStream();
             selectCamera(null);
           }}
-          className="absolute top-3 left-3 z-10 bg-gray-800/80 text-white px-3 py-1.5 rounded"
+          className="absolute top-3 left-3 z-10 bg-gray-800/80 text-white px-3 py-1.5 rounded cursor-pointer"
         >
           ← Карта
         </button>

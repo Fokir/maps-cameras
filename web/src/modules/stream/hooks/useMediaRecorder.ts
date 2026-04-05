@@ -311,6 +311,19 @@ export function useMediaRecorder(
   }, [finalizeActiveRecording]);
 
   useEffect(() => {
+    if (transportReady) return;
+    // Transport just went away. Finalize active recording and stop replay.
+    if (activeRecorderRef.current) {
+      finalizeActiveRecording(true).catch(() => {});
+    }
+    if (replayRecorderRef.current) {
+      try {
+        replayRecorderRef.current.stop();
+      } catch {}
+    }
+  }, [transportReady, finalizeActiveRecording]);
+
+  useEffect(() => {
     return () => {
       if (replayRecorderRef.current) {
         try {

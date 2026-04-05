@@ -50,13 +50,12 @@ export function useMediaRecorder(
   // header. We keep it forever so replays can prepend a valid WebM header to
   // the otherwise headerless cluster data stored in the ring buffer.
   const headerChunkRef = useRef<Blob | null>(null);
-  // Active future collectors: after the user clicks replay, we register one
-  // of these to capture the next 10 seconds of chunks from the same running
-  // bufferRecorder (no second MediaRecorder — that would produce an
-  // incompatible stream with a different segment UID).
-  const futureCollectorsRef = useRef<
-    Array<{ chunks: Blob[]; until: number; resolve: (chunks: Blob[]) => void }>
-  >([]);
+  // Active future collectors: after the user clicks replay, we register a
+  // Blob[] array here and the bufferRecorder's ondataavailable appends every
+  // subsequent chunk to it. The takeReplay caller drives timing with its own
+  // setTimeout, so this never blocks even if the handler closure is stale
+  // (e.g. after HMR). Items are removed by the caller when done.
+  const futureCollectorsRef = useRef<Blob[][]>([]);
 
   // Keep the latest measured bitrate in a ref so the buffer recorder effect
   // does not re-run every second as stats update. The recorder uses the value
@@ -104,16 +103,8 @@ export function useMediaRecorder(
         }
         bufferRef.current.push({ blob: ev.data, timestamp: Date.now() });
         // Feed any active future collectors (used by takeReplay).
-        if (futureCollectorsRef.current.length > 0) {
-          const now = Date.now();
-          futureCollectorsRef.current = futureCollectorsRef.current.filter((c) => {
-            c.chunks.push(ev.data);
-            if (now >= c.until) {
-              c.resolve(c.chunks);
-              return false;
-            }
-            return true;
-          });
+        for (const collector of futureCollectorsRef.current) {
+          collector.push(ev.data);
         }
       };
 
@@ -145,9 +136,9 @@ export function useMediaRecorder(
       bufferRecorderRef.current = null;
       bufferRef.current.clear();
       headerChunkRef.current = null;
-      // Resolve any pending future collectors with whatever they gathered —
-      // the recorder is going away, they cannot get more data.
-      for (const c of futureCollectorsRef.current) c.resolve(c.chunks);
+      // Drop any pending future collectors — the in-flight takeReplay() will
+      // still resolve on its own setTimeout and just return whatever was
+      // gathered before the transport went away.
       futureCollectorsRef.current = [];
     };
     // measuredBitrate intentionally excluded — it updates every second from stats
@@ -223,16 +214,14 @@ export function useMediaRecorder(
     // Snapshot past chunks from the ring buffer (up to last 10 seconds).
     const pastSnapshot = bufferRef.current.snapshot().map((i) => i.blob);
 
-    // Register a future collector that will be fed by the same bufferRecorder
-    // for the next 10 seconds. Using the same recorder guarantees all chunks
-    // share one EBML Segment UID, so concatenation produces a valid WebM.
-    const futureChunks = await new Promise<Blob[]>((resolve) => {
-      futureCollectorsRef.current.push({
-        chunks: [],
-        until: Date.now() + 10_000,
-        resolve,
-      });
-    });
+    // Register a future collector. The bufferRecorder's ondataavailable will
+    // append every subsequent chunk to this array. We drive timing with a
+    // plain setTimeout so this cannot hang even if the handler is stale.
+    const futureChunks: Blob[] = [];
+    futureCollectorsRef.current.push(futureChunks);
+    await new Promise((r) => setTimeout(r, 10_000));
+    const idx = futureCollectorsRef.current.indexOf(futureChunks);
+    if (idx >= 0) futureCollectorsRef.current.splice(idx, 1);
 
     setReplayState("idle");
 

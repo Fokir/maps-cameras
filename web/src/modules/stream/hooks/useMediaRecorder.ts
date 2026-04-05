@@ -46,6 +46,17 @@ export function useMediaRecorder(
 
   const bufferRef = useRef<RingBuffer>(new RingBuffer(RING_RETENTION_MS));
   const bufferRecorderRef = useRef<MediaRecorder | null>(null);
+  // The first chunk emitted by bufferRecorder carries the EBML/Segment/Tracks
+  // header. We keep it forever so replays can prepend a valid WebM header to
+  // the otherwise headerless cluster data stored in the ring buffer.
+  const headerChunkRef = useRef<Blob | null>(null);
+  // Active future collectors: after the user clicks replay, we register one
+  // of these to capture the next 10 seconds of chunks from the same running
+  // bufferRecorder (no second MediaRecorder — that would produce an
+  // incompatible stream with a different segment UID).
+  const futureCollectorsRef = useRef<
+    Array<{ chunks: Blob[]; until: number; resolve: (chunks: Blob[]) => void }>
+  >([]);
 
   // Keep the latest measured bitrate in a ref so the buffer recorder effect
   // does not re-run every second as stats update. The recorder uses the value
@@ -85,8 +96,24 @@ export function useMediaRecorder(
       }
 
       recorder.ondataavailable = (ev) => {
-        if (ev.data && ev.data.size > 0) {
-          bufferRef.current.push({ blob: ev.data, timestamp: Date.now() });
+        if (!ev.data || ev.data.size === 0) return;
+        // First chunk contains the WebM header (EBML + Segment info + Tracks).
+        // Store it separately so replays can prepend a valid header.
+        if (headerChunkRef.current === null) {
+          headerChunkRef.current = ev.data;
+        }
+        bufferRef.current.push({ blob: ev.data, timestamp: Date.now() });
+        // Feed any active future collectors (used by takeReplay).
+        if (futureCollectorsRef.current.length > 0) {
+          const now = Date.now();
+          futureCollectorsRef.current = futureCollectorsRef.current.filter((c) => {
+            c.chunks.push(ev.data);
+            if (now >= c.until) {
+              c.resolve(c.chunks);
+              return false;
+            }
+            return true;
+          });
         }
       };
 
@@ -117,15 +144,18 @@ export function useMediaRecorder(
       } catch {}
       bufferRecorderRef.current = null;
       bufferRef.current.clear();
+      headerChunkRef.current = null;
+      // Resolve any pending future collectors with whatever they gathered —
+      // the recorder is going away, they cannot get more data.
+      for (const c of futureCollectorsRef.current) c.resolve(c.chunks);
+      futureCollectorsRef.current = [];
     };
     // measuredBitrate intentionally excluded — it updates every second from stats
     // and would reset the ring buffer, defeating the purpose of instant replay.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoEl, transportReady, mimeType, bitrateSetting]);
 
-  // Placeholder APIs — implemented in next tasks.
   const [replayState, setReplayState] = useState<ReplayState>("idle");
-  const replayRecorderRef = useRef<MediaRecorder | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const activeRecorderRef = useRef<MediaRecorder | null>(null);
@@ -185,65 +215,48 @@ export function useMediaRecorder(
   );
 
   const takeReplay = useCallback(async () => {
-    if (!videoEl || !mimeType || replayRecorderRef.current) return;
-    if (!transportReady) return;
+    if (!mimeType || !bufferRecorderRef.current) return;
+    if (replayState === "capturing") return;
 
     setReplayState("capturing");
 
+    // Snapshot past chunks from the ring buffer (up to last 10 seconds).
     const pastSnapshot = bufferRef.current.snapshot().map((i) => i.blob);
-    const stream = (videoEl as HTMLVideoElement & { captureStream(): MediaStream }).captureStream();
-    const bitrate = resolveBitrate(bitrateSetting, measuredBitrate);
 
-    const futureChunks: Blob[] = [];
-    let recorder: MediaRecorder;
-    try {
-      recorder = new MediaRecorder(stream, {
-        mimeType: mimeType.mimeType,
-        videoBitsPerSecond: bitrate,
+    // Register a future collector that will be fed by the same bufferRecorder
+    // for the next 10 seconds. Using the same recorder guarantees all chunks
+    // share one EBML Segment UID, so concatenation produces a valid WebM.
+    const futureChunks = await new Promise<Blob[]>((resolve) => {
+      futureCollectorsRef.current.push({
+        chunks: [],
+        until: Date.now() + 10_000,
+        resolve,
       });
-    } catch (e) {
-      console.error("Replay recorder init failed:", e);
-      setReplayState("idle");
-      throw e;
-    }
+    });
 
-    recorder.ondataavailable = (ev) => {
-      if (ev.data && ev.data.size > 0) futureChunks.push(ev.data);
-    };
-
-    const finish = (): Promise<Blob> =>
-      new Promise((resolve) => {
-        recorder.onstop = () => {
-          const combined = new Blob([...pastSnapshot, ...futureChunks], {
-            type: mimeType.mimeType,
-          });
-          resolve(combined);
-        };
-        try {
-          recorder.stop();
-        } catch {
-          resolve(new Blob([...pastSnapshot, ...futureChunks], { type: mimeType.mimeType }));
-        }
-      });
-
-    replayRecorderRef.current = recorder;
-    try {
-      recorder.start(500);
-    } catch (e) {
-      console.error("Replay recorder start failed:", e);
-      replayRecorderRef.current = null;
-      setReplayState("idle");
-      throw e;
-    }
-
-    await new Promise((r) => setTimeout(r, 10_000));
-    const blob = await finish();
-    replayRecorderRef.current = null;
     setReplayState("idle");
 
+    // Prepend the header chunk (EBML + Segment info + Tracks) captured at
+    // bufferRecorder start. Without this the past+future cluster data is
+    // headerless and players reject everything before the next header.
+    const parts: Blob[] = [];
+    if (headerChunkRef.current) {
+      parts.push(headerChunkRef.current);
+      // The header chunk is itself already in the ring buffer snapshot if the
+      // recorder has been running for less than RING_RETENTION_MS. Dedupe by
+      // object identity to avoid writing it twice.
+      for (const b of pastSnapshot) {
+        if (b !== headerChunkRef.current) parts.push(b);
+      }
+    } else {
+      parts.push(...pastSnapshot);
+    }
+    parts.push(...futureChunks);
+
+    const combined = new Blob(parts, { type: mimeType.mimeType });
     const filename = buildFilename(cameraName, mimeType.ext);
-    await downloadBlob(blob, filename);
-  }, [videoEl, transportReady, mimeType, measuredBitrate, bitrateSetting, cameraName]);
+    await downloadBlob(combined, filename);
+  }, [mimeType, cameraName, replayState]);
   const startRecording = useCallback(async () => {
     if (!videoEl || !mimeType || activeRecorderRef.current) return;
     if (!transportReady) return;
@@ -323,25 +336,16 @@ export function useMediaRecorder(
 
   useEffect(() => {
     if (transportReady) return;
-    // Transport just went away. Finalize active recording and stop replay.
+    // Transport just went away. Finalize active recording; any in-flight
+    // replay capture will resolve naturally via the bufferRecorder cleanup
+    // (which flushes futureCollectorsRef).
     if (activeRecorderRef.current) {
       finalizeActiveRecording(true).catch(() => {});
-    }
-    if (replayRecorderRef.current) {
-      try {
-        replayRecorderRef.current.stop();
-      } catch {}
     }
   }, [transportReady, finalizeActiveRecording]);
 
   useEffect(() => {
     return () => {
-      if (replayRecorderRef.current) {
-        try {
-          replayRecorderRef.current.stop();
-        } catch {}
-        replayRecorderRef.current = null;
-      }
       if (activeRecorderRef.current) {
         try {
           activeRecorderRef.current.stop();

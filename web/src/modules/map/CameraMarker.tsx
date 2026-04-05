@@ -7,6 +7,9 @@ interface CameraMarkerProps {
   camera: Camera;
   isActive: boolean;
   isEditing?: boolean;
+  /** If false, the cone polygon ignores pointer events (useful in edit mode
+   * where the cone can overlap draggable handles of the selected camera). */
+  coneInteractive?: boolean;
   onClick: (id: string) => void;
   onPositionChange?: (id: string, lat: number, lng: number) => void;
 }
@@ -54,7 +57,14 @@ function getConePoints(
   return points;
 }
 
-export function CameraMarker({ camera, isActive, isEditing, onClick, onPositionChange }: CameraMarkerProps) {
+export function CameraMarker({
+  camera,
+  isActive,
+  isEditing,
+  coneInteractive = true,
+  onClick,
+  onPositionChange,
+}: CameraMarkerProps) {
   const map = useMap();
   const coneRef = useRef<L.Polygon | null>(null);
 
@@ -84,8 +94,19 @@ export function CameraMarker({ camera, isActive, isEditing, onClick, onPositionC
         fillOpacity: isActive ? 0.25 : 0.15,
         weight: isActive ? 2 : 1,
         dashArray: isActive ? undefined : "4 3",
-        interactive: false,
+        interactive: coneInteractive,
+        bubblingMouseEvents: false,
       }).addTo(map);
+      if (coneInteractive) {
+        coneRef.current.on("click", (e) => {
+          L.DomEvent.stopPropagation(e);
+          onClick(camera.id);
+        });
+        coneRef.current.on("dblclick", (e) => {
+          L.DomEvent.stopPropagation(e);
+          map.setView(latlng, map.getZoom(), { animate: true });
+        });
+      }
     }
 
     return () => {
@@ -94,7 +115,7 @@ export function CameraMarker({ camera, isActive, isEditing, onClick, onPositionC
         coneRef.current = null;
       }
     };
-  }, [map, position, camera.rotation, camera.angle, camera.distance, camera.color, isActive]);
+  }, [map, position, camera.rotation, camera.angle, camera.distance, camera.color, isActive, camera.id, coneInteractive, onClick]);
 
   if (!position) return null;
 
@@ -105,6 +126,10 @@ export function CameraMarker({ camera, isActive, isEditing, onClick, onPositionC
       draggable={isEditing}
       eventHandlers={{
         click: () => onClick(camera.id),
+        dblclick: (e) => {
+          L.DomEvent.stopPropagation(e);
+          map.setView(e.target.getLatLng(), map.getZoom(), { animate: true });
+        },
         dragend: (e) => {
           if (onPositionChange) {
             const ll = e.target.getLatLng();

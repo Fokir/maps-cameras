@@ -47,11 +47,12 @@ export function CameraForm() {
   const handleSave = async () => {
     pushSnapshot(cameras);
     if (isNew) {
-      await createCamera({ name, rtsp_url: rtspUrl, color });
+      const created = await createCamera({ name, rtsp_url: rtspUrl, color });
+      // Keep the form open on the freshly created camera instead of closing it.
+      setEditingId(created.id);
     } else if (camera) {
       await updateCamera(camera.id, { ...camera, name, rtsp_url: rtspUrl, color });
     }
-    setEditingId(null);
   };
 
   const handleDelete = async () => {

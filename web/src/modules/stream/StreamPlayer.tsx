@@ -13,13 +13,46 @@ export function StreamPlayer() {
     const video = videoRef.current;
     const wsUrl = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}${streamInfo.ws_url}`;
     const ws = new WebSocket(wsUrl);
+    ws.binaryType = "arraybuffer";
 
     let mediaSource: MediaSource | null = null;
     let sourceBuffer: SourceBuffer | null = null;
     const queue: ArrayBuffer[] = [];
 
+    // go2rtc expects an exact set of codec tokens. It parses them literally,
+    // so only these strings trigger the right media selection.
+    // See pkg/mp4/mime.go in AlexxIT/go2rtc.
+    const candidateCodecs = [
+      "avc1.640029",
+      "avc1.64002A",
+      "avc1.640033",
+      "hvc1.1.6.L153.B0",
+      "mp4a.40.2",
+      "mp4a.40.5",
+      "flac",
+      "opus",
+    ];
+
+    const appendNext = () => {
+      if (!sourceBuffer || sourceBuffer.updating) return;
+      const buf = queue.shift();
+      if (buf) {
+        try {
+          sourceBuffer.appendBuffer(buf);
+        } catch (e) {
+          console.error("appendBuffer failed:", e);
+        }
+      }
+    };
+
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "mse" }));
+      const supported = candidateCodecs.filter((c) =>
+        MediaSource.isTypeSupported(`video/mp4; codecs="${c}"`)
+      );
+      // go2rtc expects raw comma-joined codec tokens, NOT a full MIME string.
+      const value = supported.join(",");
+      console.log("Sending MSE codecs:", value);
+      ws.send(JSON.stringify({ type: "mse", value }));
     };
 
     ws.onmessage = (event) => {
@@ -32,36 +65,41 @@ export function StreamPlayer() {
             try {
               sourceBuffer = mediaSource!.addSourceBuffer(msg.value);
               sourceBuffer.mode = "segments";
-              sourceBuffer.addEventListener("updateend", () => {
-                if (queue.length > 0 && sourceBuffer && !sourceBuffer.updating) {
-                  sourceBuffer.appendBuffer(queue.shift()!);
-                }
-              });
+              sourceBuffer.addEventListener("updateend", appendNext);
+              appendNext();
             } catch (e) {
-              console.error("MSE codec not supported:", e);
+              console.error("MSE codec not supported:", msg.value, e);
             }
           });
           video.play().catch(() => {});
+        } else if (msg.type === "error") {
+          console.error("go2rtc error:", msg.value);
         }
-      } else if (event.data instanceof Blob) {
-        event.data.arrayBuffer().then((buf) => {
-          if (sourceBuffer && !sourceBuffer.updating) {
-            sourceBuffer.appendBuffer(buf);
-          } else {
-            queue.push(buf);
+      } else if (event.data instanceof ArrayBuffer) {
+        if (sourceBuffer && !sourceBuffer.updating && queue.length === 0) {
+          try {
+            sourceBuffer.appendBuffer(event.data);
+          } catch (e) {
+            queue.push(event.data);
           }
-        });
+        } else {
+          queue.push(event.data);
+        }
       }
     };
 
-    ws.onerror = () => {
-      console.error("WebSocket error, stream may not be available");
+    ws.onerror = (e) => {
+      console.error("WebSocket error:", e);
+    };
+
+    ws.onclose = (e) => {
+      console.log("WebSocket closed:", e.code, e.reason);
     };
 
     return () => {
       ws.close();
       if (mediaSource && mediaSource.readyState === "open") {
-        mediaSource.endOfStream();
+        try { mediaSource.endOfStream(); } catch {}
       }
       video.src = "";
     };

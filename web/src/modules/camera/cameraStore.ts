@@ -32,11 +32,26 @@ export const useCameraStore = create<CameraState>((set, get) => ({
   },
 
   updateCamera: async (id, data) => {
-    const updated = await cameraApi.update(id, data);
+    // Optimistic update: apply locally immediately, then sync to the server.
+    const current = get().cameras.find((c) => c.id === id);
+    if (!current) throw new Error(`camera not found: ${id}`);
+    const optimistic: Camera = { ...current, ...data, id };
     set((s) => ({
-      cameras: s.cameras.map((c) => (c.id === id ? updated : c)),
+      cameras: s.cameras.map((c) => (c.id === id ? optimistic : c)),
     }));
-    return updated;
+    try {
+      const updated = await cameraApi.update(id, optimistic);
+      set((s) => ({
+        cameras: s.cameras.map((c) => (c.id === id ? updated : c)),
+      }));
+      return updated;
+    } catch (err) {
+      // Rollback on failure
+      set((s) => ({
+        cameras: s.cameras.map((c) => (c.id === id ? current : c)),
+      }));
+      throw err;
+    }
   },
 
   deleteCamera: async (id) => {

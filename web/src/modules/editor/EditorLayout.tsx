@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { MapView } from "@/modules/map/MapView";
 import { CameraMarker } from "@/modules/map/CameraMarker";
 import { CameraList } from "@/modules/camera/CameraList";
@@ -8,6 +8,7 @@ import { useEditorStore } from "./editorStore";
 import { useHistoryStore } from "./historyStore";
 import { DragDrop } from "./DragDrop";
 import { CameraControls } from "@/modules/map/CameraControls";
+import { MiniStreamPreview } from "@/modules/stream/MiniStreamPreview";
 
 export function EditorLayout() {
   const cameras = useCameraStore((s) => s.cameras);
@@ -21,32 +22,64 @@ export function EditorLayout() {
   const clear = useHistoryStore((s) => s.clear);
   const fetchCameras = useCameraStore((s) => s.fetchCameras);
 
-  // Initialize history on enter
+  // Initialize history on enter — but only once cameras are actually loaded.
+  const historyInitialized = useRef(false);
   useEffect(() => {
-    pushSnapshot(cameras);
-    return () => clear();
-  }, []);
+    if (!historyInitialized.current && cameras.length > 0) {
+      pushSnapshot(cameras);
+      historyInitialized.current = true;
+    }
+  }, [cameras, pushSnapshot]);
+
+  useEffect(() => {
+    return () => {
+      clear();
+      historyInitialized.current = false;
+    };
+  }, [clear]);
 
   // Ctrl+Z / Ctrl+Shift+Z
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        const prev = undo();
-        if (prev) {
-          useCameraStore.setState({ cameras: prev });
-        }
-      }
-      if (e.ctrlKey && e.key === "z" && e.shiftKey) {
-        e.preventDefault();
-        const next = redo();
-        if (next) {
-          useCameraStore.setState({ cameras: next });
-        }
-      }
+      // Use e.code (physical key) to be layout-independent — e.key returns "я"
+      // on a Russian layout when the user presses Z.
+      if (e.code !== "KeyZ") return;
+      const isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey;
+      const isRedo = (e.ctrlKey || e.metaKey) && e.shiftKey;
+      if (!isUndo && !isRedo) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const snapshot = isUndo ? undo() : redo();
+      if (!snapshot) return;
+
+      const current = useCameraStore.getState().cameras;
+      // Persist any cameras whose mutable fields differ from the snapshot.
+      const mutableKeys: (keyof import("@/shared/types").Camera)[] = [
+        "lat", "lng", "rotation", "angle", "distance", "name", "rtsp_url", "color",
+      ];
+      const changed = snapshot.filter((snap) => {
+        const cur = current.find((c) => c.id === snap.id);
+        if (!cur) return false;
+        return mutableKeys.some((k) => cur[k] !== snap[k]);
+      });
+
+      // Apply locally first so the UI updates immediately.
+      useCameraStore.setState({ cameras: snapshot });
+
+      // Then sync each changed camera to the server.
+      // We call the API directly to avoid updateCamera mutating cameras again
+      // (which would race against our snapshot restore above).
+      changed.forEach((cam) => {
+        import("@/modules/camera/cameraApi").then(({ cameraApi }) =>
+          cameraApi.update(cam.id, cam).catch((err) =>
+            console.error("failed to sync undo/redo to server:", err)
+          )
+        );
+      });
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
   }, [undo, redo]);
 
   const handleCameraClick = (id: string) => {
@@ -61,31 +94,37 @@ export function EditorLayout() {
 
   return (
     <div className="h-full flex">
-      <div className="w-[200px] flex-shrink-0">
+      <div className="w-[280px] flex-shrink-0">
         <CameraList />
       </div>
 
       <div className="flex-1 relative">
         <MapView>
           {cameras
-            .filter((c) => c.lat != null)
+            .filter((c) => c.lat != null && c.id !== selectedId)
             .map((c) => (
               <CameraMarker
                 key={c.id}
                 camera={c}
-                isActive={c.id === selectedId}
+                isActive={false}
+                coneInteractive={false}
                 onClick={handleCameraClick}
               />
             ))}
           <DragDrop />
           {selectedId && cameras.find((c) => c.id === selectedId && c.lat != null) && (
-            <CameraControls camera={cameras.find((c) => c.id === selectedId)!} />
+            <CameraControls
+              key={selectedId}
+              camera={cameras.find((c) => c.id === selectedId)!}
+            />
           )}
         </MapView>
 
-        <div className="absolute top-3 left-3 z-[1000] bg-amber-900/30 text-amber-400 text-xs px-2.5 py-1 rounded border border-amber-700/30">
+        <div className="absolute top-3 left-3 z-[1000] bg-amber-600 text-gray-900 text-xs px-2.5 py-1 rounded border border-amber-700 shadow font-medium">
           🔧 Режим редактирования
         </div>
+
+        <MiniStreamPreview />
 
         <button
           onClick={handleExitEdit}

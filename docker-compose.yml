@@ -1,9 +1,36 @@
 services:
   maps-cameras:
-    build: .
+    # Use the pre-built image from GitHub Container Registry.
+    # Swap to `build: .` if you want to build from source locally.
+    image: ghcr.io/fokir/maps-cameras:latest
+    container_name: maps-cameras
+    restart: unless-stopped
+
+    # Host networking is the simplest way for the backend to talk to a go2rtc
+    # running on the same machine (e.g. inside Frigate). If go2rtc is on a
+    # different host, bridge networking works too — see extra_hosts below.
+    # network_mode: host
+
     ports:
       - "8080:8080"
+
     volumes:
+      # SQLite database and any runtime state (auto-created)
       - ./data:/app/data
-      - ./config.yaml:/app/config.yaml
-    restart: unless-stopped
+      # Your config. Omit this mount to use the image's baked-in default.
+      - ./config.yaml:/app/config.yaml:ro
+
+    environment:
+      - TZ=Europe/Moscow
+
+    # If go2rtc runs on a different host and that host uses an /etc/hosts name
+    # (like sokol.local) the container can't resolve on its own, add it here:
+    # extra_hosts:
+    #   - "sokol.local:192.168.1.10"
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/api/cameras"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

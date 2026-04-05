@@ -3,6 +3,7 @@ package stream
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -12,12 +13,20 @@ import (
 type Proxy struct {
 	go2rtcURL string
 	client    *http.Client
+	wsDialer  *websocket.Dialer
 }
 
 func NewProxy(go2rtcURL string) *Proxy {
+	// Bypass any HTTP_PROXY env var — go2rtc is reachable directly on the local network
+	transport := &http.Transport{Proxy: nil}
+	wsDialer := &websocket.Dialer{
+		Proxy:            nil,
+		HandshakeTimeout: websocket.DefaultDialer.HandshakeTimeout,
+	}
 	return &Proxy{
 		go2rtcURL: go2rtcURL,
-		client:    &http.Client{},
+		client:    &http.Client{Transport: transport},
+		wsDialer:  wsDialer,
 	}
 }
 
@@ -40,7 +49,7 @@ func (p *Proxy) AddStream(name, rtspURL string) error {
 }
 
 func (p *Proxy) RemoveStream(name string) error {
-	u := fmt.Sprintf("%s/api/streams?name=%s", p.go2rtcURL, url.QueryEscape(name))
+	u := fmt.Sprintf("%s/api/streams?src=%s", p.go2rtcURL, url.QueryEscape(name))
 	req, err := http.NewRequest(http.MethodDelete, u, nil)
 	if err != nil {
 		return err
@@ -61,8 +70,14 @@ func (p *Proxy) ProxyWebSocket(w http.ResponseWriter, r *http.Request, targetPat
 	targetURL := fmt.Sprintf("ws://%s%s?%s",
 		mustParseHost(p.go2rtcURL), targetPath, r.URL.RawQuery)
 
-	backendConn, _, err := websocket.DefaultDialer.Dial(targetURL, nil)
+	log.Printf("proxying WS to: %s", targetURL)
+	backendConn, resp, err := p.wsDialer.Dial(targetURL, nil)
 	if err != nil {
+		if resp != nil {
+			log.Printf("go2rtc ws dial failed: %v (status: %d)", err, resp.StatusCode)
+		} else {
+			log.Printf("go2rtc ws dial failed: %v", err)
+		}
 		http.Error(w, fmt.Sprintf("go2rtc ws connect failed: %v", err), http.StatusBadGateway)
 		return
 	}

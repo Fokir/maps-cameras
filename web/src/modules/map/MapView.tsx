@@ -1,4 +1,5 @@
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import L from "leaflet";
 import { useMapStore } from "./mapStore";
 import { useEffect } from "react";
 
@@ -17,18 +18,38 @@ function MapController() {
   const map = useMap();
   const center = useMapStore((s) => s.center);
   const zoom = useMapStore((s) => s.zoom);
+  const fitBoundsRequest = useMapStore((s) => s.fitBoundsRequest);
 
   useEffect(() => {
     map.setView(center, zoom);
   }, [map, center, zoom]);
 
   useEffect(() => {
-    const handleResize = () => {
+    if (!fitBoundsRequest || fitBoundsRequest.coords.length === 0) return;
+    if (fitBoundsRequest.coords.length === 1) {
+      map.setView(fitBoundsRequest.coords[0], 18, { animate: true });
+      return;
+    }
+    const bounds = L.latLngBounds(fitBoundsRequest.coords);
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 19, animate: true });
+  }, [map, fitBoundsRequest]);
+
+  useEffect(() => {
+    const container = map.getContainer();
+    const recenter = () => {
+      const c = map.getCenter();
       map.invalidateSize();
-      map.setView(map.getCenter(), map.getZoom());
+      map.setView(c, map.getZoom(), { animate: false });
     };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+
+    const observer = new ResizeObserver(recenter);
+    observer.observe(container);
+    window.addEventListener("resize", recenter);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", recenter);
+    };
   }, [map]);
 
   return null;
@@ -36,12 +57,17 @@ function MapController() {
 
 function TileLayerSwitch() {
   const tileLayer = useMapStore((s) => s.tileLayer);
+  // OSM has tiles only up to zoom 19. Esri up to 20.
+  // maxNativeZoom limits actual tile requests; maxZoom allows the map itself
+  // to zoom beyond that by scaling the last available tiles.
+  const maxNativeZoom = tileLayer === "streets" ? 19 : 20;
   return (
     <TileLayer
       key={tileLayer}
       url={TILE_URLS[tileLayer]}
       attribution={TILE_ATTR[tileLayer]}
-      maxZoom={20}
+      maxNativeZoom={maxNativeZoom}
+      maxZoom={22}
     />
   );
 }
@@ -59,6 +85,7 @@ export function MapView({ children }: { children?: React.ReactNode }) {
         zoom={zoom}
         className="h-full w-full"
         zoomControl={false}
+        doubleClickZoom={false}
       >
         <MapController />
         <TileLayerSwitch />

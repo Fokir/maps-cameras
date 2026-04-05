@@ -1,0 +1,27 @@
+# Maps Cameras configuration
+#
+# Copy this file to `config.yaml` next to your docker-compose.yml
+# (or into the project root for local development) and edit as needed.
+
+server:
+  # Port the HTTP server listens on inside the container.
+  # Map it through docker-compose `ports` to expose it to the host.
+  port: 8080
+
+database:
+  # Path to the SQLite file (inside the container when running via Docker).
+  # Mount /app/data as a volume to persist this.
+  path: ./data/cameras.db
+
+go2rtc:
+  # Full URL of your go2rtc instance, including the API port.
+  # Common setups:
+  #   - Frigate bundled go2rtc:      http://sokol.local:1984
+  #   - Standalone go2rtc on same box: http://127.0.0.1:1984
+  url: http://sokol.local:1984
+
+map:
+  # Fallback center + zoom if no cameras are placed yet.
+  # Once at least one camera is placed, the app auto-fits to show all of them.
+  center: [54.3142, 48.4031]
+  zoom: 18

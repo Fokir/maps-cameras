@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ViewerLayout } from "./ViewerLayout";
 import { EditorLayout } from "@/modules/editor/EditorLayout";
 import { useCameraStore } from "@/modules/camera/cameraStore";
@@ -9,7 +9,9 @@ import type { MapConfig } from "@/shared/types";
 
 export function App() {
   const fetchCameras = useCameraStore((s) => s.fetchCameras);
+  const cameras = useCameraStore((s) => s.cameras);
   const mode = useEditorStore((s) => s.mode);
+  const initialFitDone = useRef(false);
 
   useEffect(() => {
     fetchCameras();
@@ -18,6 +20,21 @@ export function App() {
       useMapStore.getState().setZoom(cfg.zoom);
     });
   }, [fetchCameras]);
+
+  // Once cameras arrive, fit the map to show all placed cameras.
+  useEffect(() => {
+    if (initialFitDone.current) return;
+    if (cameras.length === 0) return;
+    const placed = cameras.filter(
+      (c): c is typeof c & { lat: number; lng: number } =>
+        c.lat != null && c.lng != null
+    );
+    if (placed.length === 0) return;
+    useMapStore.getState().fitBounds(
+      placed.map((c) => [c.lat, c.lng] as [number, number])
+    );
+    initialFitDone.current = true;
+  }, [cameras]);
 
   return mode === "edit" ? <EditorLayout /> : <ViewerLayout />;
 }

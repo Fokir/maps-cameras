@@ -1,19 +1,31 @@
 import { useCameraStore } from "./cameraStore";
 import { useEditorStore } from "@/modules/editor/editorStore";
+import { useMapStore } from "@/modules/map/mapStore";
 import { ImportM3U } from "./ImportM3U";
+import type { Camera } from "@/shared/types";
 
 export function CameraList() {
   const cameras = useCameraStore((s) => s.cameras);
+  const selectCamera = useCameraStore((s) => s.selectCamera);
   const editingId = useEditorStore((s) => s.editingCameraId);
   const setEditingId = useEditorStore((s) => s.setEditingCameraId);
+  const setCenter = useMapStore((s) => s.setCenter);
+
+  const handleSelect = (cam: Camera) => {
+    setEditingId(cam.id);
+    if (cam.lat != null && cam.lng != null) {
+      selectCamera(cam.id);
+      setCenter([cam.lat, cam.lng]);
+    }
+  };
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 border-r border-gray-700 p-3">
-      <h3 className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-3">
+    <div className="h-full flex flex-col bg-gray-900 border-r border-gray-700 py-3 pl-3 pr-1">
+      <h3 className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-3 pr-2">
         Камеры
       </h3>
 
-      <div className="flex-1 overflow-y-auto space-y-1.5">
+      <div className="flex-1 overflow-y-auto space-y-1.5 pr-2">
         {cameras.map((cam) => {
           const onMap = cam.lat != null;
           return (
@@ -23,7 +35,7 @@ export function CameraList() {
               onDragStart={(e) => {
                 e.dataTransfer.setData("camera-id", cam.id);
               }}
-              onClick={() => setEditingId(cam.id)}
+              onClick={() => handleSelect(cam)}
               className={`flex items-center gap-2 px-2.5 py-2 rounded cursor-pointer border transition
                 ${editingId === cam.id ? "border-blue-500 bg-gray-800" : "border-gray-700 hover:bg-gray-800"}
                 ${!onMap ? "cursor-grab" : ""}
@@ -47,11 +59,11 @@ export function CameraList() {
 
       <button
         onClick={() => setEditingId("new")}
-        className="mt-3 bg-blue-600 hover:bg-blue-500 text-white text-sm py-2 rounded font-medium"
+        className="mt-3 mr-2 bg-blue-600 hover:bg-blue-500 text-white text-sm py-2 rounded font-medium"
       >
         + Добавить
       </button>
-      <div className="mt-2">
+      <div className="mt-2 mr-2">
         <ImportM3U />
       </div>
     </div>

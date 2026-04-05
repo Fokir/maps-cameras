@@ -20,6 +20,13 @@ data/
 # Superpowers
 .superpowers/
 
+# Tool state
+.serena/
+.playwright-mcp/
+
+# Ad-hoc screenshots at repo root
+/*.png
+
 # OS
 .DS_Store
 Thumbs.db

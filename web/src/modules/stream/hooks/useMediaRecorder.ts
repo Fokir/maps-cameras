@@ -51,36 +51,61 @@ export function useMediaRecorder(
   useEffect(() => {
     if (!videoEl || !transportReady || !mimeType) return;
 
-    let recorder: MediaRecorder;
-    try {
-      const stream = (videoEl as HTMLVideoElement & { captureStream(): MediaStream }).captureStream();
-      const bitrate = resolveBitrate(bitrateSetting, measuredBitrate);
-      recorder = new MediaRecorder(stream, {
-        mimeType: mimeType.mimeType,
-        videoBitsPerSecond: bitrate,
-      });
-    } catch (e) {
-      console.error("Buffer recorder init failed:", e);
-      return;
-    }
+    let recorder: MediaRecorder | null = null;
+    let cancelled = false;
 
-    recorder.ondataavailable = (ev) => {
-      if (ev.data && ev.data.size > 0) {
-        bufferRef.current.push({ blob: ev.data, timestamp: Date.now() });
+    const initRecorder = () => {
+      if (cancelled) return;
+      // videoEl may not expose tracks yet even after loadeddata on some transports.
+      const stream = (videoEl as HTMLVideoElement & { captureStream(): MediaStream }).captureStream();
+      if (stream.getVideoTracks().length === 0) {
+        // No tracks yet — schedule a short retry. loadeddata may fire before tracks
+        // are actually exposed via captureStream in some browsers.
+        setTimeout(initRecorder, 200);
+        return;
+      }
+
+      try {
+        const bitrate = resolveBitrate(bitrateSetting, measuredBitrate);
+        recorder = new MediaRecorder(stream, {
+          mimeType: mimeType.mimeType,
+          videoBitsPerSecond: bitrate,
+        });
+      } catch (e) {
+        console.error("Buffer recorder init failed:", e);
+        return;
+      }
+
+      recorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) {
+          bufferRef.current.push({ blob: ev.data, timestamp: Date.now() });
+        }
+      };
+
+      try {
+        recorder.start(RING_CHUNK_MS);
+        bufferRecorderRef.current = recorder;
+      } catch (e) {
+        console.error("Buffer recorder start failed:", e);
+        recorder = null;
+        return;
       }
     };
 
-    try {
-      recorder.start(RING_CHUNK_MS);
-      bufferRecorderRef.current = recorder;
-    } catch (e) {
-      console.error("Buffer recorder start failed:", e);
-      return;
+    if (videoEl.readyState >= 2) {
+      initRecorder();
+    } else {
+      const onLoaded = () => {
+        videoEl.removeEventListener("loadeddata", onLoaded);
+        initRecorder();
+      };
+      videoEl.addEventListener("loadeddata", onLoaded);
     }
 
     return () => {
+      cancelled = true;
       try {
-        if (recorder.state !== "inactive") recorder.stop();
+        if (recorder && recorder.state !== "inactive") recorder.stop();
       } catch {}
       bufferRecorderRef.current = null;
       bufferRef.current.clear();
